@@ -1,4 +1,4 @@
-<script setup>
+﻿<script setup>
 import { ref, onMounted, onUnmounted, computed } from 'vue'
 import TopBar from './components/TopBar.vue'
 import BottomPanel from './components/BottomPanel.vue'
@@ -26,15 +26,19 @@ const noPersonHintVisible = ref(false)
 const isSettingsOpen = ref(false)
 const isLoading = ref(true)
 const loadingProgress = ref(0)
-const loadingText = ref('正在加载 MediaPipe 模型...')
+const loadingText = ref('姝ｅ湪鍔犺浇 MediaPipe 妯″瀷...')
 const badgeState = ref('')
-const badgeLabel = ref('初始化中')
+const badgeLabel = ref('鍒濆鍖栦腑')
 const scanLineActive = ref(false)
 const videoActive = ref(false)
 
 const fps = ref(0)
 const avgConfidence = ref(0)
 const currentAssessment = ref({ score: null, items: [] })
+const captureList = ref([])
+const captureBuffer = ref([])
+const captureSessionId = ref('')
+const captureRootHandle = ref(null)
 
 const settings = ref({
   complexity: 1,
@@ -52,7 +56,15 @@ const selectedSwimStyle = ref('蝶泳')
 // ============ Composables ============
 const poseEngine = usePoseEngine()
 const { draw, getJointAngles, setConfig: setSkeletonConfig } = useSkeletonDraw()
-const { analyze, reset, exportJSON, strokeCount, detectedStroke } = useSwimAnalysis()
+const {
+  analyze,
+  reset,
+  exportJSON,
+  toggleRecording,
+  isRecording,
+  strokeCount,
+  detectedStroke,
+} = useSwimAnalysis()
 const { 
   isOnline, 
   deviceType, 
@@ -69,16 +81,21 @@ const jointAngles = ref({
   rightShoulder: null,
 })
 
-// 性能优化：UI 更新节流控制
+const CAPTURE_INTERVAL_MS = 700
+const MAX_CAPTURE_ITEMS = 120
+let lastCaptureTime = 0
+let lastCaptureStrokeCount = 0
+
+// 鎬ц兘浼樺寲锛歎I 鏇存柊鑺傛祦鎺у埗
 let lastUIUpdate = 0
-const UI_UPDATE_INTERVAL = 150  // 每 150ms 更新一次 UI，而非每帧
+const UI_UPDATE_INTERVAL = 150  // 姣?150ms 鏇存柊涓€娆?UI锛岃€岄潪姣忓抚
 
 // 用于节流的临时存储
 const pendingJointAngles = ref(null)
 const pendingFps = ref(0)
 const pendingConfidence = ref(0)
 
-// 性能优化：批量更新 UI，减少 Vue 响应式触发频率
+// 批量更新 UI，减少高频响应触发
 const throttledUIUpdate = () => {
   const now = performance.now()
   if (now - lastUIUpdate >= UI_UPDATE_INTERVAL) {
@@ -98,6 +115,137 @@ const throttledUIUpdate = () => {
   }
 }
 
+const resetCaptureBuffer = () => {
+  captureBuffer.value = []
+  captureList.value = []
+  captureSessionId.value = formatSessionId(new Date())
+  lastCaptureTime = 0
+  lastCaptureStrokeCount = strokeCount.value
+}
+
+const finalizeCaptureList = async () => {
+  captureList.value = captureBuffer.value.filter(
+    (item) => typeof item.image === 'string' && item.image.startsWith('data:image/')
+  )
+  await saveCaptureListToLocal()
+}
+
+const tryCaptureFrame = (analysisResult, fpsValue, confidenceValue, sourceImage = null) => {
+  if (!canvas.value || !analysisResult) return
+
+  const now = Date.now()
+  const strokeChanged = analysisResult.strokeCount > lastCaptureStrokeCount
+  if (!strokeChanged && now - lastCaptureTime < CAPTURE_INTERVAL_MS) return
+
+  if (!canvas.value.width || !canvas.value.height) return
+
+  let imageData = ''
+  try {
+    const snapCanvas = document.createElement('canvas')
+    snapCanvas.width = canvas.value.width
+    snapCanvas.height = canvas.value.height
+    const snapCtx = snapCanvas.getContext('2d')
+    if (!snapCtx) return
+
+    if (sourceImage) {
+      snapCtx.drawImage(sourceImage, 0, 0, snapCanvas.width, snapCanvas.height)
+    } else if (video.value && video.value.readyState >= 2) {
+      snapCtx.drawImage(video.value, 0, 0, snapCanvas.width, snapCanvas.height)
+    } else {
+      snapCtx.fillStyle = '#000'
+      snapCtx.fillRect(0, 0, snapCanvas.width, snapCanvas.height)
+    }
+
+    snapCtx.drawImage(canvas.value, 0, 0, snapCanvas.width, snapCanvas.height)
+    imageData = snapCanvas.toDataURL('image/jpeg', 0.72)
+  } catch (err) {
+    console.warn('[Capture] snapshot failed:', err)
+    return
+  }
+
+  if (!imageData || imageData === 'data:,') return
+
+  const item = {
+    id: `cap-${now}-${analysisResult.strokeCount}`,
+    image: imageData,
+    time: new Date(now).toLocaleTimeString('zh-CN', { hour12: false }),
+    style: analysisResult.style,
+    phase: analysisResult.phase,
+    score: analysisResult.assessment?.score ?? null,
+    confidence: Math.round((confidenceValue || 0) * 100),
+    fps: Math.round(fpsValue || 0),
+    strokeCount: analysisResult.strokeCount,
+  }
+
+  captureBuffer.value.unshift(item)
+  if (captureBuffer.value.length > MAX_CAPTURE_ITEMS) {
+    captureBuffer.value.length = MAX_CAPTURE_ITEMS
+  }
+
+  lastCaptureTime = now
+  lastCaptureStrokeCount = analysisResult.strokeCount
+}
+
+const formatSessionId = (date) => {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  const hour = String(date.getHours()).padStart(2, '0')
+  const minute = String(date.getMinutes()).padStart(2, '0')
+  const second = String(date.getSeconds()).padStart(2, '0')
+  return `${year}${month}${day}-${hour}${minute}${second}`
+}
+
+const dataURLToBlob = async (dataURL) => {
+  const response = await fetch(dataURL)
+  return response.blob()
+}
+
+const saveCaptureListToLocal = async () => {
+  if (!captureList.value.length) return
+  if (!window.showDirectoryPicker) return
+
+  try {
+    if (!captureRootHandle.value) {
+      captureRootHandle.value = await window.showDirectoryPicker({ mode: 'readwrite' })
+    }
+
+    const sessionId = captureSessionId.value || formatSessionId(new Date())
+    const sessionDir = await captureRootHandle.value.getDirectoryHandle(`capture-${sessionId}`, {
+      create: true,
+    })
+
+    for (let index = 0; index < captureList.value.length; index++) {
+      const item = captureList.value[index]
+      const fileName = `${String(index + 1).padStart(3, '0')}-${item.style}-${item.phase}.jpg`
+      const fileHandle = await sessionDir.getFileHandle(fileName, { create: true })
+      const writable = await fileHandle.createWritable()
+      const blob = await dataURLToBlob(item.image)
+      await writable.write(blob)
+      await writable.close()
+    }
+
+    const metaHandle = await sessionDir.getFileHandle('metadata.json', { create: true })
+    const metaWritable = await metaHandle.createWritable()
+    await metaWritable.write(JSON.stringify(captureList.value, null, 2))
+    await metaWritable.close()
+  } catch (err) {
+    console.warn('[Capture] save local failed:', err)
+  }
+}
+
+const handleVideoEnded = () => {
+  if (analysisMode.value !== 'video') return
+
+  poseEngine.stopLoop()
+  updateBadge('', '视频已结束')
+
+  if (isRecording.value) {
+    toggleRecording()
+  }
+  void finalizeCaptureList()
+}
+
 // ============ Methods ============
 const updateBadge = (state, label) => {
   badgeState.value = state
@@ -107,7 +255,7 @@ const updateBadge = (state, label) => {
 const handleNoPerson = () => {
   if (personDetected.value) {
     personDetected.value = false
-    updateBadge('', '等待入镜')
+    updateBadge('', '绛夊緟鍏ラ暅')
   }
   clearTimeout(noPersonTimer)
   noPersonTimer = setTimeout(() => {
@@ -154,7 +302,7 @@ const startCamera = async (facing) => {
     }
 
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      throw new Error('浏览器不支持相机 API')
+      throw new Error('娴忚鍣ㄤ笉鏀寔鐩告満 API')
     }
 
     if (!window.isSecureContext) {
@@ -167,14 +315,14 @@ const startCamera = async (facing) => {
 
     // 检查网络状态
     if (!isOnline.value) {
-      loadingText.value = '请检查网络连接后重试'
+      loadingText.value = '璇锋鏌ョ綉缁滆繛鎺ュ悗閲嶈瘯'
       updateBadge('error', '无网络')
       return
     }
 
     const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
 
-    // iOS/Safari 对约束支持不稳定，按“从严格到宽松”逐级降级
+    // iOS/Safari 瀵圭害鏉熸敮鎸佷笉绋冲畾锛屾寜鈥滀粠涓ユ牸鍒板鏉锯€濋€愮骇闄嶇骇
     const candidates = isIOS
       ? [
           { video: { facingMode: { ideal: facing } }, audio: false },
@@ -224,7 +372,7 @@ const startCamera = async (facing) => {
     await new Promise((resolve, reject) => {
       let done = false
       const timeout = setTimeout(() => {
-        if (!done) reject(new Error('视频加载超时'))
+        if (!done) reject(new Error('瑙嗛鍔犺浇瓒呮椂'))
       }, 10000)
 
       video.value.onloadedmetadata = () => {
@@ -244,30 +392,30 @@ const startCamera = async (facing) => {
 
     poseEngine.startLoop(video.value)
 
-    // 请求屏幕常亮 (移动端训练时不熄屏)
+    // 璇锋眰灞忓箷甯镐寒 (绉诲姩绔缁冩椂涓嶇唲灞?
     requestWakeLock()
   } catch (err) {
     console.error('[Camera Error]', err?.name, err?.message, err)
 
-    let errorMsg = '相机启动失败'
+    let errorMsg = '鐩告満鍚姩澶辫触'
 
     if (err.message && err.message.includes('HTTPS')) {
       errorMsg = '请使用 HTTPS 打开页面（iPhone 必须）'
     } else if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
       errorMsg = deviceType.value === 'ios'
         ? '请在 iPhone 设置 > Safari > 相机 里允许访问，并刷新页面'
-        : '请允许相机权限后刷新页面'
+        : '璇峰厑璁哥浉鏈烘潈闄愬悗鍒锋柊椤甸潰'
     } else if (err.name === 'NotFoundError') {
       errorMsg = '未找到相机设备'
     } else if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
-      errorMsg = '相机被占用，请关闭其他相机应用后重试'
+      errorMsg = '鐩告満琚崰鐢紝璇峰叧闂叾浠栫浉鏈哄簲鐢ㄥ悗閲嶈瘯'
     } else if (err.name === 'OverconstrainedError') {
       errorMsg = '当前相机参数不支持，已建议改用默认相机'
-    } else if (err.message && err.message.includes('超时')) {
-      errorMsg = '相机启动超时，请刷新重试'
+    } else if (err.message && err.message.includes('瓒呮椂')) {
+      errorMsg = '鐩告満鍚姩瓒呮椂锛岃鍒锋柊閲嶈瘯'
     }
 
-    updateBadge('error', '相机错误')
+    updateBadge('error', '鐩告満閿欒')
     loadingText.value = errorMsg
     loadingProgress.value = 0
   }
@@ -319,7 +467,13 @@ const applySettings = async (newSettings) => {
 }
 
 const handleExport = () => {
-  exportJSON()
+  const exported = exportJSON()
+  if (!exported) {
+    updateBadge('error', '未录制')
+    loadingText.value = '请先点击“开始录制”，再导出 JSON 数据'
+    return
+  }
+  updateBadge('live', '导出成功')
 }
 
 const openVideoImporter = () => {
@@ -362,7 +516,7 @@ const switchToVideoMode = async (file) => {
     video.value.src = objectURL
 
     await new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => reject(new Error('视频加载超时')), 10000)
+      const timeout = setTimeout(() => reject(new Error('瑙嗛鍔犺浇瓒呮椂')), 10000)
       video.value.onloadedmetadata = () => {
         clearTimeout(timeout)
         resolve()
@@ -382,8 +536,8 @@ const switchToVideoMode = async (file) => {
     poseEngine.startLoop(video.value)
   } catch (err) {
     console.error('[Video Import Error]', err)
-    updateBadge('error', '视频导入失败')
-    loadingText.value = '视频导入失败，请更换文件重试'
+    updateBadge('error', '瑙嗛瀵煎叆澶辫触')
+    loadingText.value = '瑙嗛瀵煎叆澶辫触锛岃鏇存崲鏂囦欢閲嶈瘯'
   }
 }
 
@@ -393,7 +547,7 @@ const handleVideoImport = async (event) => {
 
   const isVideo = file.type.startsWith('video/') || /\.(mp4|mov|m4v|webm|avi)$/i.test(file.name)
   if (!isVideo) {
-    updateBadge('error', '文件格式错误')
+    updateBadge('error', '鏂囦欢鏍煎紡閿欒')
     loadingText.value = '请选择视频文件（mp4/mov/webm）'
     return
   }
@@ -403,8 +557,21 @@ const handleVideoImport = async (event) => {
 
 const handleReset = () => {
   reset()
-  // 震动反馈
+  // 闇囧姩鍙嶉
   vibrate([50, 30, 50])
+}
+
+const recordBtnText = computed(() => (isRecording.value ? '停止录制' : '开始录制'))
+
+const handleRecord = () => {
+  const recording = toggleRecording()
+  if (recording) {
+    resetCaptureBuffer()
+  } else {
+    void finalizeCaptureList()
+  }
+  updateBadge(recording ? 'live' : '', recording ? '录制中' : '已停止录制')
+  vibrate(recording ? [20, 40, 20] : 20)
 }
 
 const toggleCamera = () => {
@@ -435,7 +602,7 @@ onMounted(() => {
     ctx = canvas.value.getContext('2d')
   }
 
-  // 加载进度动画
+  // 鍔犺浇杩涘害鍔ㄧ敾
   const loadInterval = setInterval(() => {
     if (loadingProgress.value < 85) {
       loadingProgress.value += Math.random() * 12
@@ -453,7 +620,7 @@ onMounted(() => {
     onResults: ({ landmarks, image, fps: fpsValue }) => {
       if (!ctx || !canvas.value) return
       
-      // Canvas 绘制（保持流畅，不节流）
+      // Canvas 缁樺埗锛堜繚鎸佹祦鐣咃紝涓嶈妭娴侊級
       ctx.clearRect(0, 0, canvas.value.width, canvas.value.height)
       if (image) {
         ctx.drawImage(image, 0, 0, canvas.value.width, canvas.value.height)
@@ -461,7 +628,7 @@ onMounted(() => {
 
       if (!landmarks) {
         handleNoPerson()
-        // 无人时立即清空 UI
+        // 鏃犱汉鏃剁珛鍗虫竻绌?UI
         jointAngles.value = {
           leftElbow: null,
           rightElbow: null,
@@ -474,39 +641,44 @@ onMounted(() => {
 
       handlePersonDetected()
 
-      // 骨骼绘制（保持流畅）
+      // 楠ㄩ缁樺埗锛堜繚鎸佹祦鐣咃級
       draw(ctx, landmarks, canvas.value.width, canvas.value.height)
 
       const angles = getJointAngles(landmarks)
       
-      // 泳姿分析：使用用户手动选择的泳姿，不再自动识别泳姿类型
+      // 娉冲Э鍒嗘瀽锛氫娇鐢ㄧ敤鎴锋墜鍔ㄩ€夋嫨鐨勬吵濮匡紝涓嶅啀鑷姩璇嗗埆娉冲Э绫诲瀷
       const analysisResult = analyze(landmarks, angles, selectedSwimStyle.value)
       if (analysisResult?.assessment) {
         currentAssessment.value = analysisResult.assessment
       }
       
-      // 检测划臂计数变化，触发震动反馈
+      // 妫€娴嬪垝鑷傝鏁板彉鍖栵紝瑙﹀彂闇囧姩鍙嶉
       if (strokeCount.value > prevStrokeCount) {
         vibrate(40)
         prevStrokeCount = strokeCount.value
       }
 
-      // 节流：将数据存入待更新队列，而非立即更新 UI
+      // 鑺傛祦锛氬皢鏁版嵁瀛樺叆寰呮洿鏂伴槦鍒楋紝鑰岄潪绔嬪嵆鏇存柊 UI
       pendingFps.value = fpsValue
+      const confidenceNow = calcAvgConfidence(landmarks)
       pendingJointAngles.value = {
         leftElbow: angles.leftElbow ?? null,
         rightElbow: angles.rightElbow ?? null,
         leftShoulder: angles.leftShoulder ?? null,
         rightShoulder: angles.rightShoulder ?? null,
       }
-      pendingConfidence.value = calcAvgConfidence(landmarks)
+      pendingConfidence.value = confidenceNow
+
+      if (isRecording.value) {
+        tryCaptureFrame(analysisResult, fpsValue, confidenceNow, image)
+      }
       
-      // 批量更新 UI（节流）
+      // 鎵归噺鏇存柊 UI锛堣妭娴侊級
       throttledUIUpdate()
     },
     onError: (err) => {
       console.error('[PoseEngine]', err)
-      updateBadge('error', '引擎错误')
+      updateBadge('error', '寮曟搸閿欒')
     },
   })
 
@@ -535,26 +707,37 @@ const angleBars = computed(() => ({
 }))
 
 const confidencePercent = computed(() => Math.round(avgConfidence.value * 100) + '%')
+const showCaptureList = computed(() => !isRecording.value && captureList.value.length > 0)
 </script>
 
 <template>
   <div id="app">
-    <!-- 视频 + 骨骼画布区域 -->
-    <div class="video-wrapper">
-      <video ref="video" id="video" autoplay muted playsinline :class="{ active: videoActive }"></video>
+    <!-- 瑙嗛 + 楠ㄩ鐢诲竷鍖哄煙 -->
+    <div class="video-wrapper" :class="{ 'with-capture-list': showCaptureList }">
+      <video
+        ref="video"
+        id="video"
+        autoplay
+        muted
+        playsinline
+        :class="{ active: videoActive }"
+        @ended="handleVideoEnded"
+      ></video>
       <canvas ref="canvas" id="output-canvas"></canvas>
 
-      <!-- 扫描线动画 -->
+      <!-- 鎵弿绾垮姩鐢?-->
       <div class="scan-line" :class="{ active: scanLineActive }"></div>
 
-      <!-- 右上角徽章 -->
+      <!-- 鍙充笂瑙掑窘绔?-->
       <div class="corner-badge">
         <span class="badge-dot" :class="badgeState"></span>
         <span>{{ badgeLabel }}</span>
       </div>
 
-      <!-- 实时动作标准判断（蝶泳） -->
-      <div v-if="selectedSwimStyle === '蝶泳'" class="technique-panel">
+      <div
+        v-if="selectedSwimStyle === '蝶泳' && currentAssessment.items.length"
+        class="butterfly-technique-panel"
+      >
         <div class="technique-header">
           <span>蝶泳动作标准</span>
           <strong>{{ currentAssessment.score ?? 0 }}分</strong>
@@ -572,47 +755,48 @@ const confidencePercent = computed(() => Math.round(avgConfidence.value * 100) +
         </div>
       </div>
 
-      <!-- 无人提示 -->
+      <!-- 鏃犱汉鎻愮ず -->
       <div class="no-person-hint" :class="{ show: noPersonHintVisible }">
-        <div class="hint-icon">🏊</div>
+        <div class="hint-icon">馃強</div>
         <p>请将相机对准游泳者</p>
       </div>
 
-      <!-- 网络离线提示 -->
+      <!-- 缃戠粶绂荤嚎鎻愮ず -->
       <div v-if="!isOnline" class="offline-hint">
-        <div class="hint-icon">📡</div>
+        <div class="hint-icon">馃摗</div>
         <p>网络已断开，部分功能可能受限</p>
       </div>
 
-      <!-- 横屏建议提示 (仅在竖屏且非全屏时显示) -->
+      <!-- 妯睆寤鸿鎻愮ず (浠呭湪绔栧睆涓旈潪鍏ㄥ睆鏃舵樉绀? -->
       <div v-if="isPortrait && !isLoading" class="orientation-hint">
         <p>💡 横屏可获得更佳体验</p>
       </div>
 
-      <!-- 水波纹背景 -->
+      <!-- 姘存尝绾硅儗鏅?-->
       <div class="water-bg"></div>
     </div>
 
-    <!-- 顶部栏 -->
+    <!-- 椤堕儴鏍?-->
     <TopBar @settings="toggleSettings" @export="handleExport" @import-video="openVideoImporter" />
 
-    <!-- 手动选择泳姿（固定识别目标，不自动分类） -->
-    <div class="swim-style-manual">
-      <span class="style-label">当前泳姿：</span>
-      <div class="style-buttons">
-        <button
-          v-for="style in swimStyleOptions"
-          :key="style"
-          class="style-btn"
-          :class="{ active: selectedSwimStyle === style }"
-          @click="selectedSwimStyle = style"
+    <div v-if="showCaptureList" class="capture-list-panel">
+      <div class="capture-list-scroll">
+        <div
+          v-for="item in captureList"
+          :key="item.id"
+          class="capture-item"
         >
-          {{ style }}
-        </button>
+          <img :src="item.image" alt="capture frame">
+          <div class="capture-item-meta">
+            <span>{{ item.time }} · 第{{ item.strokeCount }}次</span>
+            <span>{{ item.style }}·{{ item.phase }}</span>
+            <span>准确度 {{ item.confidence }}% · FPS {{ item.fps }}</span>
+          </div>
+        </div>
       </div>
     </div>
 
-    <!-- 底部数据面板 -->
+    <!-- 搴曢儴鏁版嵁闈㈡澘 -->
     <BottomPanel
       :stroke="detectedStroke"
       :stroke-count="strokeCount"
@@ -621,12 +805,19 @@ const confidencePercent = computed(() => Math.round(avgConfidence.value * 100) +
       :joint-angles="jointAngles"
       :angle-bars="angleBars"
       :pause-btn-text="pauseBtnText"
+      :record-btn-text="recordBtnText"
+      :selected-swim-style="selectedSwimStyle"
+      :swim-style-options="swimStyleOptions"
+      :assessment="currentAssessment"
+      :hide-assessment="selectedSwimStyle === '蝶泳'"
       @reset="handleReset"
+      @record="handleRecord"
       @camera="toggleCamera"
       @pause="togglePause"
+      @select-style="selectedSwimStyle = $event"
     />
 
-    <!-- 设置抽屉 -->
+    <!-- 璁剧疆鎶藉眽 -->
     <SettingsDrawer
       :is-open="isSettingsOpen"
       :settings="settings"
@@ -635,7 +826,7 @@ const confidencePercent = computed(() => Math.round(avgConfidence.value * 100) +
       @update-skeleton="setSkeletonConfig"
     />
 
-    <!-- 遮罩 -->
+    <!-- 閬僵 -->
     <div class="overlay" :class="{ visible: isSettingsOpen }" @click="isSettingsOpen = false"></div>
 
     <input
@@ -646,7 +837,7 @@ const confidencePercent = computed(() => Math.round(avgConfidence.value * 100) +
       @change="handleVideoImport"
     >
 
-    <!-- 加载遮罩 -->
+    <!-- 鍔犺浇閬僵 -->
     <LoadingOverlay
       :is-loading="isLoading"
       :progress="loadingProgress"
@@ -654,3 +845,4 @@ const confidencePercent = computed(() => Math.round(avgConfidence.value * 100) +
     />
   </div>
 </template>
+

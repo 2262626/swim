@@ -51,6 +51,10 @@ html, body {
   background: #000;
 }
 
+.video-wrapper.with-capture-list {
+  margin-right: 260px;
+}
+
 #video {
   position: absolute;
   inset: 0;
@@ -69,6 +73,86 @@ html, body {
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+
+.capture-list-panel {
+  position: absolute;
+  top: 56px;
+  right: 0;
+  bottom: calc(var(--panel-h) + env(safe-area-inset-bottom));
+  width: 260px;
+  padding: 10px;
+  background: rgba(6, 14, 24, 0.9);
+  border-left: 1px solid rgba(0, 229, 255, 0.2);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 12;
+}
+
+.capture-preview {
+  border: 1px solid rgba(0, 229, 255, 0.24);
+  border-radius: 10px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.capture-preview img {
+  width: 100%;
+  height: 110px;
+  object-fit: cover;
+  display: block;
+}
+
+.capture-preview-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 8px;
+  font-size: 11px;
+  color: #c9f6ff;
+}
+
+.capture-list-scroll {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.capture-item {
+  flex: 0 0 auto;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+  color: var(--text);
+  overflow: hidden;
+}
+
+.capture-item.active {
+  border-color: rgba(0, 229, 255, 0.8);
+  box-shadow: 0 0 0 1px rgba(0, 229, 255, 0.25) inset;
+}
+
+.capture-item img {
+  width: 100%;
+  height: 110px;
+  min-height: 110px;
+  object-fit: cover;
+  display: block;
+}
+
+.capture-item-meta {
+  padding: 6px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 10px;
+  color: #d7f9ff;
 }
 
 /* 扫描线 */
@@ -110,6 +194,19 @@ html, body {
   position: absolute;
   top: 48px;
   right: 12px;
+  width: 220px;
+  background: rgba(3, 12, 24, 0.75);
+  border: 1px solid rgba(0, 229, 255, 0.25);
+  border-radius: 10px;
+  padding: 8px;
+  backdrop-filter: blur(8px);
+  z-index: 11;
+}
+
+.butterfly-technique-panel {
+  position: absolute;
+  top: 56px;
+  left: 12px;
   width: 220px;
   background: rgba(3, 12, 24, 0.75);
   border: 1px solid rgba(0, 229, 255, 0.25);
@@ -270,6 +367,60 @@ html, body {
   flex-shrink: 0;
 }
 
+.panel-style-manual {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+
+.panel-technique {
+  background: rgba(3, 12, 24, 0.55);
+  border: 1px solid rgba(0, 229, 255, 0.22);
+  border-radius: 10px;
+  padding: 8px;
+  margin-bottom: 10px;
+}
+
+.panel-technique-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  margin-bottom: 6px;
+  color: #c8f7ff;
+}
+
+.panel-technique-header strong {
+  color: #00e5ff;
+}
+
+.panel-technique-items {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.panel-technique-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+  border-radius: 6px;
+  padding: 4px 6px;
+}
+
+.panel-technique-item.ok {
+  background: rgba(105, 255, 71, 0.14);
+  color: #b6ffaf;
+}
+
+.panel-technique-item.bad {
+  background: rgba(255, 64, 129, 0.14);
+  color: #ff9dbb;
+}
+
 /* 统计卡片行 */
 .stats-row {
   display: grid;
@@ -378,6 +529,12 @@ html, body {
   background: var(--primary-dim);
   border-color: var(--primary);
   color: var(--primary);
+}
+
+.action-btn.record {
+  border-color: rgba(255, 64, 129, 0.45);
+  background: rgba(255, 64, 129, 0.12);
+  color: #ff8ab1;
 }
 
 .action-btn.danger {
@@ -821,6 +978,31 @@ input[type="range"]::-webkit-slider-thumb {
   
   .logo span {
     font-size: 12px;
+  }
+}
+
+@media (max-width: 1100px) {
+  .video-wrapper.with-capture-list {
+    margin-right: 220px;
+  }
+
+  .capture-list-panel {
+    right: 0;
+    width: 220px;
+  }
+}
+
+@media (max-width: 768px) {
+  .video-wrapper.with-capture-list {
+    margin-right: 0;
+  }
+
+  .capture-list-panel {
+    right: 0;
+    top: 52px;
+    bottom: calc(var(--panel-h) + env(safe-area-inset-bottom));
+    width: 44vw;
+    min-width: 170px;
   }
 }
 

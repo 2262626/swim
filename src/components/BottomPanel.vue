@@ -7,16 +7,62 @@ const props = defineProps({
   jointAngles: Object,
   angleBars: Object,
   pauseBtnText: String,
+  recordBtnText: String,
+  selectedSwimStyle: String,
+  swimStyleOptions: {
+    type: Array,
+    default: () => [],
+  },
+  assessment: {
+    type: Object,
+    default: () => ({ score: null, items: [] }),
+  },
+  hideAssessment: {
+    type: Boolean,
+    default: false,
+  },
 })
 
-const emit = defineEmits(['reset', 'camera', 'pause'])
+defineEmits(['reset', 'camera', 'pause', 'record', 'select-style'])
 
-const formatAngle = (val) => val ? val + '°' : '—°'
+const formatAngle = (value) => (value ? `${value}°` : '—°')
 </script>
 
 <template>
   <div class="bottom-panel">
-    <!-- 数据卡片行 -->
+    <div class="panel-style-manual">
+      <span class="style-label">当前泳姿：</span>
+      <div class="style-buttons">
+        <button
+          v-for="style in swimStyleOptions"
+          :key="style"
+          class="style-btn"
+          :class="{ active: selectedSwimStyle === style }"
+          @click="$emit('select-style', style)"
+        >
+          {{ style }}
+        </button>
+      </div>
+    </div>
+
+    <div v-if="!hideAssessment && assessment?.items?.length" class="panel-technique">
+      <div class="panel-technique-header">
+        <span>{{ selectedSwimStyle }}动作标准</span>
+        <strong>{{ assessment.score ?? 0 }}分</strong>
+      </div>
+      <div class="panel-technique-items">
+        <div
+          v-for="item in assessment.items"
+          :key="item.key"
+          class="panel-technique-item"
+          :class="{ ok: item.ok, bad: !item.ok }"
+        >
+          <span class="name">{{ item.label }}</span>
+          <span class="status">{{ item.ok ? '✓ 正确' : '✕ 错误' }}</span>
+        </div>
+      </div>
+    </div>
+
     <div class="stats-row">
       <div class="stat-card">
         <div class="stat-label">泳姿</div>
@@ -36,7 +82,6 @@ const formatAngle = (val) => val ? val + '°' : '—°'
       </div>
     </div>
 
-    <!-- 关节角度条 -->
     <div class="angle-row">
       <div class="angle-item">
         <span class="angle-label">左肘</span>
@@ -68,9 +113,9 @@ const formatAngle = (val) => val ? val + '°' : '—°'
       </div>
     </div>
 
-    <!-- 底部按钮 -->
     <div class="btn-row">
       <button class="action-btn danger" @click="$emit('reset')">重置计数</button>
+      <button class="action-btn record" @click="$emit('record')">{{ recordBtnText }}</button>
       <button class="action-btn primary" @click="$emit('camera')">切换摄像头</button>
       <button class="action-btn" @click="$emit('pause')">{{ pauseBtnText }}</button>
     </div>
