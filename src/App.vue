@@ -34,6 +34,7 @@ const videoActive = ref(false)
 
 const fps = ref(0)
 const avgConfidence = ref(0)
+const currentAssessment = ref({ score: null, items: [] })
 
 const settings = ref({
   complexity: 1,
@@ -479,7 +480,10 @@ onMounted(() => {
       const angles = getJointAngles(landmarks)
       
       // 泳姿分析：使用用户手动选择的泳姿，不再自动识别泳姿类型
-      analyze(landmarks, angles, selectedSwimStyle.value)
+      const analysisResult = analyze(landmarks, angles, selectedSwimStyle.value)
+      if (analysisResult?.assessment) {
+        currentAssessment.value = analysisResult.assessment
+      }
       
       // 检测划臂计数变化，触发震动反馈
       if (strokeCount.value > prevStrokeCount) {
@@ -547,6 +551,25 @@ const confidencePercent = computed(() => Math.round(avgConfidence.value * 100) +
       <div class="corner-badge">
         <span class="badge-dot" :class="badgeState"></span>
         <span>{{ badgeLabel }}</span>
+      </div>
+
+      <!-- 实时动作标准判断（蝶泳） -->
+      <div v-if="selectedSwimStyle === '蝶泳'" class="technique-panel">
+        <div class="technique-header">
+          <span>蝶泳动作标准</span>
+          <strong>{{ currentAssessment.score ?? 0 }}分</strong>
+        </div>
+        <div class="technique-items">
+          <div
+            v-for="item in currentAssessment.items"
+            :key="item.key"
+            class="technique-item"
+            :class="{ ok: item.ok, bad: !item.ok }"
+          >
+            <span class="name">{{ item.label }}</span>
+            <span class="status">{{ item.ok ? '✓ 正确' : '✕ 错误' }}</span>
+          </div>
+        </div>
       </div>
 
       <!-- 无人提示 -->

@@ -106,6 +106,57 @@ html, body {
   backdrop-filter: blur(8px);
 }
 
+.technique-panel {
+  position: absolute;
+  top: 48px;
+  right: 12px;
+  width: 220px;
+  background: rgba(3, 12, 24, 0.75);
+  border: 1px solid rgba(0, 229, 255, 0.25);
+  border-radius: 10px;
+  padding: 8px;
+  backdrop-filter: blur(8px);
+  z-index: 11;
+}
+
+.technique-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  margin-bottom: 6px;
+  color: #c8f7ff;
+}
+
+.technique-header strong {
+  color: #00e5ff;
+}
+
+.technique-items {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.technique-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+  border-radius: 6px;
+  padding: 4px 6px;
+}
+
+.technique-item.ok {
+  background: rgba(105, 255, 71, 0.14);
+  color: #b6ffaf;
+}
+
+.technique-item.bad {
+  background: rgba(255, 64, 129, 0.14);
+  color: #ff9dbb;
+}
+
 .badge-dot {
   width: 7px; height: 7px;
   border-radius: 50%;

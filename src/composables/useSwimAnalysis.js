@@ -18,13 +18,27 @@ const STROKE_PHASES = {
   UNKNOWN: '准备',
 }
 
+const STYLE_STANDARDS = {
+  蝶泳: {
+    name: '蝶泳标准 v1',
+    thresholds: {
+      armSyncYDiff: 0.07,
+      armStraightDeg: 150,
+      legCloseXDiff: 0.12,
+      legStraightDeg: 155,
+      waveAmplitude: 0.03,
+      breathNoseLift: 0.02,
+    },
+  },
+}
+
 export function useSwimAnalysis() {
   const strokeCount = ref(0)
   const detectedStyle = ref(STROKE_TYPES.UNKNOWN)
   const detectedPhase = ref(STROKE_PHASES.UNKNOWN)
   const detectedStroke = ref(`${STROKE_TYPES.UNKNOWN}·${STROKE_PHASES.UNKNOWN}`)
   const strokeHistory = ref([])
-  // 高频缓存使用普通数组，避免每帧触发响应式开销
+
   const exportBuffer = []
   const frameBuffer = []
 
@@ -32,7 +46,7 @@ export function useSwimAnalysis() {
 
   const BUFFER_SIZE = 30
   const STROKE_COOLDOWN_MS = 450
-  const MAX_EXPORT = 500
+  const MAX_EXPORT = 2000
 
   const reset = () => {
     strokeCount.value = 0
@@ -64,6 +78,9 @@ export function useSwimAnalysis() {
       detectArmStroke(landmarks, now)
     }
 
+    const standard = STYLE_STANDARDS[style] || null
+    const assessment = evaluateTechnique(style, phase, landmarks, angles, standard)
+
     const rate = calcStrokeRate()
     const symmetry = calcSymmetry(angles)
 
@@ -75,6 +92,8 @@ export function useSwimAnalysis() {
       strokeRate: rate,
       symmetry,
       angles,
+      standardName: standard?.name || '通用规则',
+      assessment,
       timestamp: now,
     }
 
@@ -99,7 +118,6 @@ export function useSwimAnalysis() {
 
     const shoulderMidY = (ls.y + rs.y) / 2
 
-    // 仰泳：头部明显高于肩线（画面中 y 更小）
     if (nose && nose.visibility > 0.35 && nose.y < shoulderMidY - 0.08) {
       return STROKE_TYPES.BACKSTROKE
     }
@@ -108,20 +126,17 @@ export function useSwimAnalysis() {
     const wristXSpan = Math.abs(lw.x - rw.x)
     const elbowBent = (angles.leftElbow ?? 180) < 120 || (angles.rightElbow ?? 180) < 120
 
-    // 蝶泳：双手基本同高且展宽明显
     if (wristYDiff < 0.06 && wristXSpan > 0.32) {
       return STROKE_TYPES.BUTTERFLY
     }
 
-    // 蛙泳：双手更居中、肘屈明显
     const shoulderMidX = (ls.x + rs.x) / 2
     const wristMidX = (lw.x + rw.x) / 2
-    const wristsCentered = Math.abs(wristMidX - shoulderMidX) < 0.10
-    if (wristsCentered && wristXSpan < 0.30 && elbowBent) {
+    const wristsCentered = Math.abs(wristMidX - shoulderMidX) < 0.1
+    if (wristsCentered && wristXSpan < 0.3 && elbowBent) {
       return STROKE_TYPES.BREASTSTROKE
     }
 
-    // 默认按自由泳
     return STROKE_TYPES.FREESTYLE
   }
 
@@ -165,11 +180,135 @@ export function useSwimAnalysis() {
       return STROKE_PHASES.ENTRY
     }
 
-    // 自由泳
     if (minDy < -0.06) return STROKE_PHASES.RECOVERY
     if (minElbow < 120 && maxDy < 0.04) return STROKE_PHASES.CATCH
     if (maxDy > 0.04 && maxElbow > 125) return STROKE_PHASES.PULL
     return STROKE_PHASES.ENTRY
+  }
+
+  const evaluateTechnique = (style, phase, landmarks, angles, standard) => {
+    if (style !== STROKE_TYPES.BUTTERFLY || !standard) {
+      return {
+        score: null,
+        items: [],
+      }
+    }
+
+    const t = standard.thresholds
+
+    const ls = landmarks[KP.L_SHOULDER]
+    const rs = landmarks[KP.R_SHOULDER]
+    const lw = landmarks[KP.L_WRIST]
+    const rw = landmarks[KP.R_WRIST]
+    const lh = landmarks[KP.L_HIP]
+    const rh = landmarks[KP.R_HIP]
+    const lk = landmarks[KP.L_KNEE]
+    const rk = landmarks[KP.R_KNEE]
+    const la = landmarks[KP.L_ANKLE]
+    const ra = landmarks[KP.R_ANKLE]
+    const nose = landmarks[KP.NOSE]
+
+    const leftElbow = angles.leftElbow ?? null
+    const rightElbow = angles.rightElbow ?? null
+    const leftKnee = angles.leftKnee ?? null
+    const rightKnee = angles.rightKnee ?? null
+
+    const armSync = lw && rw ? Math.abs(lw.y - rw.y) <= t.armSyncYDiff : false
+    const armStraight =
+      leftElbow != null && rightElbow != null
+        ? leftElbow >= t.armStraightDeg && rightElbow >= t.armStraightDeg
+        : false
+
+    const legClose =
+      lk && rk && la && ra
+        ? Math.abs(lk.x - rk.x) <= t.legCloseXDiff && Math.abs(la.x - ra.x) <= t.legCloseXDiff
+        : false
+
+    const legStraight =
+      leftKnee != null && rightKnee != null
+        ? leftKnee >= t.legStraightDeg && rightKnee >= t.legStraightDeg
+        : false
+
+    const bodyWave = calcButterflyBodyWave(standard)
+
+    let breathTiming = false
+    if (nose && ls && rs) {
+      const shoulderMidY = (ls.y + rs.y) / 2
+      const lifted = nose.y < shoulderMidY - t.breathNoseLift
+      breathTiming = phase === STROKE_PHASES.PULL ? lifted : !lifted
+    }
+
+    const items = [
+      {
+        key: 'armSync',
+        label: '双臂同步',
+        ok: armSync,
+        detail: armSync ? '双臂基本同高' : '双臂不同步，一高一低',
+      },
+      {
+        key: 'armStraight',
+        label: '手臂伸直',
+        ok: armStraight,
+        detail: armStraight ? '出水与前伸较直' : '肘关节弯曲偏大',
+      },
+      {
+        key: 'bodyWave',
+        label: '躯干波浪',
+        ok: bodyWave,
+        detail: bodyWave ? '髋肩起伏有波浪' : '躯干起伏不足，偏僵硬',
+      },
+      {
+        key: 'legClose',
+        label: '双腿并拢',
+        ok: legClose,
+        detail: legClose ? '膝踝间距正常' : '双腿分离偏大',
+      },
+      {
+        key: 'legStraight',
+        label: '腿部伸直',
+        ok: legStraight,
+        detail: legStraight ? '鞭状打腿较直' : '膝关节弯曲偏大',
+      },
+      {
+        key: 'breathTiming',
+        label: '呼吸配合',
+        ok: breathTiming,
+        detail: breathTiming ? '抬头时机匹配阶段' : '呼吸抬头时机不匹配',
+      },
+    ]
+
+    const okCount = items.filter((i) => i.ok).length
+    const score = Math.round((okCount / items.length) * 100)
+
+    return {
+      score,
+      items,
+    }
+  }
+
+  const calcButterflyBodyWave = (standard) => {
+    const t = standard.thresholds
+    if (frameBuffer.length < 8) return false
+
+    const deltas = frameBuffer
+      .slice(-12)
+      .map((f) => {
+        const ls = f.landmarks[KP.L_SHOULDER]
+        const rs = f.landmarks[KP.R_SHOULDER]
+        const lh = f.landmarks[KP.L_HIP]
+        const rh = f.landmarks[KP.R_HIP]
+        if (!ls || !rs || !lh || !rh) return null
+        const shoulderMidY = (ls.y + rs.y) / 2
+        const hipMidY = (lh.y + rh.y) / 2
+        return shoulderMidY - hipMidY
+      })
+      .filter((v) => v != null)
+
+    if (deltas.length < 6) return false
+
+    const maxD = Math.max(...deltas)
+    const minD = Math.min(...deltas)
+    return Math.abs(maxD - minD) >= t.waveAmplitude
   }
 
   const detectArmStroke = (landmarks, now) => {
