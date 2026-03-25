@@ -772,3 +772,41 @@ input[type="range"]::-webkit-slider-thumb {
     --primary-dim: rgba(0, 229, 255, 0.3);
   }
 }
+
+/* ============================================
+   GPU 加速优化
+   ============================================ */
+
+/* 视频和画布使用 GPU 加速 */
+#video, #output-canvas {
+  transform: translateZ(0);
+  will-change: transform;
+}
+
+/* 扫描线动画优化 */
+.scan-line {
+  will-change: top;
+}
+
+/* 徽章和提示使用 GPU 层 */
+.corner-badge, .no-person-hint, .offline-hint, .orientation-hint {
+  transform: translateZ(0);
+  backface-visibility: hidden;
+}
+
+/* 底部面板使用 GPU 加速 */
+.bottom-panel, .top-bar, .settings-drawer {
+  transform: translateZ(0);
+}
+
+/* 数据卡片动画优化 */
+.stat-card, .angle-item {
+  will-change: transform;
+}
+
+/* 移动端减少 will-change 避免内存压力 */
+@media (hover: none) and (pointer: coarse) {
+  .stat-card, .angle-item {
+    will-change: auto;
+  }
+}

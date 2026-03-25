@@ -96,6 +96,8 @@ const config = ref({
   showLabels: true,
   upperOnly: false,
   minVisibility: 0.3,
+  // 性能优化：移动端禁用阴影
+  enableShadow: !(/Android|webOS|iPhone|iPad|iPod/i.test(navigator.userAgent)),
 })
 
 export function useSkeletonDraw() {
@@ -131,8 +133,10 @@ export function useSkeletonDraw() {
       const color = config.value.lineColor || getSegmentColor(si, ei)
 
       ctx.save()
-      ctx.shadowColor = color
-      ctx.shadowBlur = 8
+      if (config.value.enableShadow) {
+        ctx.shadowColor = color
+        ctx.shadowBlur = 8
+      }
       ctx.beginPath()
       ctx.moveTo(sx, sy)
       ctx.lineTo(ex, ey)
@@ -167,8 +171,10 @@ export function useSkeletonDraw() {
       const r = isKeyJoint ? config.value.dotRadius + 2 : config.value.dotRadius - 1
       const dotColor = config.value.lineColor || (isKeyJoint ? '#ffffff' : 'rgba(255,255,255,0.6)')
 
-      ctx.shadowColor = dotColor
-      ctx.shadowBlur = isKeyJoint ? 10 : 4
+      if (config.value.enableShadow) {
+        ctx.shadowColor = dotColor
+        ctx.shadowBlur = isKeyJoint ? 10 : 4
+      }
 
       ctx.beginPath()
       ctx.arc(x, y, r, 0, Math.PI * 2)

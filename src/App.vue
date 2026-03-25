@@ -62,6 +62,35 @@ const jointAngles = ref({
   rightShoulder: null,
 })
 
+// 性能优化：UI 更新节流控制
+let lastUIUpdate = 0
+const UI_UPDATE_INTERVAL = 150  // 每 150ms 更新一次 UI，而非每帧
+
+// 用于节流的临时存储
+const pendingJointAngles = ref(null)
+const pendingFps = ref(0)
+const pendingConfidence = ref(0)
+
+// 性能优化：批量更新 UI，减少 Vue 响应式触发频率
+const throttledUIUpdate = () => {
+  const now = performance.now()
+  if (now - lastUIUpdate >= UI_UPDATE_INTERVAL) {
+    if (pendingJointAngles.value) {
+      jointAngles.value = { ...pendingJointAngles.value }
+      pendingJointAngles.value = null
+    }
+    if (pendingFps.value) {
+      fps.value = pendingFps.value
+      pendingFps.value = 0
+    }
+    if (pendingConfidence.value) {
+      avgConfidence.value = pendingConfidence.value
+      pendingConfidence.value = 0
+    }
+    lastUIUpdate = now
+  }
+}
+
 // ============ Methods ============
 const updateBadge = (state, label) => {
   badgeState.value = state
@@ -296,15 +325,15 @@ onMounted(() => {
     onResults: ({ landmarks, image, fps: fpsValue }) => {
       if (!ctx || !canvas.value) return
       
+      // Canvas 绘制（保持流畅，不节流）
       ctx.clearRect(0, 0, canvas.value.width, canvas.value.height)
       if (image) {
         ctx.drawImage(image, 0, 0, canvas.value.width, canvas.value.height)
       }
 
-      fps.value = fpsValue
-
       if (!landmarks) {
         handleNoPerson()
+        // 无人时立即清空 UI
         jointAngles.value = {
           leftElbow: null,
           rightElbow: null,
@@ -317,16 +346,12 @@ onMounted(() => {
 
       handlePersonDetected()
 
+      // 骨骼绘制（保持流畅）
       draw(ctx, landmarks, canvas.value.width, canvas.value.height)
 
       const angles = getJointAngles(landmarks)
-      jointAngles.value = {
-        leftElbow: angles.leftElbow ?? null,
-        rightElbow: angles.rightElbow ?? null,
-        leftShoulder: angles.leftShoulder ?? null,
-        rightShoulder: angles.rightShoulder ?? null,
-      }
-
+      
+      // 泳姿分析（保持流畅，用于计数）
       analyze(landmarks, angles)
       
       // 检测划臂计数变化，触发震动反馈
@@ -335,7 +360,18 @@ onMounted(() => {
         prevStrokeCount = strokeCount.value
       }
 
-      avgConfidence.value = calcAvgConfidence(landmarks)
+      // 节流：将数据存入待更新队列，而非立即更新 UI
+      pendingFps.value = fpsValue
+      pendingJointAngles.value = {
+        leftElbow: angles.leftElbow ?? null,
+        rightElbow: angles.rightElbow ?? null,
+        leftShoulder: angles.leftShoulder ?? null,
+        rightShoulder: angles.rightShoulder ?? null,
+      }
+      pendingConfidence.value = calcAvgConfidence(landmarks)
+      
+      // 批量更新 UI（节流）
+      throttledUIUpdate()
     },
     onError: (err) => {
       console.error('[PoseEngine]', err)

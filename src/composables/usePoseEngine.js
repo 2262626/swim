@@ -6,8 +6,15 @@ export function usePoseEngine() {
   const isPaused = ref(false)
   let animFrameId = null
 
+  // 检测是否为移动设备
+  const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+  
+  // 跳帧控制
+  let frameCount = 0
+  const skipFrames = isMobile ? 2 : 0  // 移动端每 3 帧处理一次
+
   const currentOptions = ref({
-    modelComplexity: 1,
+    modelComplexity: isMobile ? 0 : 1,  // 移动端默认快速模式
     smoothLandmarks: true,
     enableSegmentation: false,
     smoothSegmentation: false,
@@ -15,7 +22,7 @@ export function usePoseEngine() {
     minTrackingConfidence: 0.30,
   })
 
-  const _complexity = ref(1)
+  const _complexity = ref(isMobile ? 0 : 1)
 
   let onResultsCb = null
   let onReadyCb = null
@@ -34,6 +41,13 @@ export function usePoseEngine() {
 
   const _handleResults = (results) => {
     if (isPaused.value) return
+
+    frameCount++
+    
+    // 跳帧逻辑：移动端降低处理频率
+    if (skipFrames > 0 && frameCount % (skipFrames + 1) !== 0) {
+      return
+    }
 
     const now = performance.now()
     const fps = _calcFPS(now)
