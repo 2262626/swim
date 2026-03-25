@@ -133,6 +133,14 @@ const resizeCanvas = () => {
 
 const startCamera = async (facing) => {
   try {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      throw new Error('浏览器不支持相机 API')
+    }
+
+    if (!window.isSecureContext) {
+      throw new Error('请使用 HTTPS 或 localhost 访问，才能调用相机')
+    }
+
     if (currentStream.value) {
       currentStream.value.getTracks().forEach(t => t.stop())
     }
@@ -144,48 +152,69 @@ const startCamera = async (facing) => {
       return
     }
 
-    // iOS Safari 需要简化的约束
     const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
-    
-    let constraints
-    if (isIOS) {
-      // iOS 使用简单约束
-      constraints = {
-        video: {
-          facingMode: facing,  // iOS 不支持 { ideal: facing } 对象格式
-        },
-        audio: false,
-      }
-    } else {
-      // 其他设备使用完整约束
-      constraints = {
-        video: {
-          facingMode: { ideal: facing },
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-        },
-        audio: false,
+
+    // iOS/Safari 对约束支持不稳定，按“从严格到宽松”逐级降级
+    const candidates = isIOS
+      ? [
+          { video: { facingMode: { ideal: facing } }, audio: false },
+          { video: { facingMode: facing }, audio: false },
+          { video: true, audio: false },
+        ]
+      : [
+          {
+            video: {
+              facingMode: { ideal: facing },
+              width: { ideal: 1280 },
+              height: { ideal: 720 },
+            },
+            audio: false,
+          },
+          { video: { facingMode: facing }, audio: false },
+          { video: true, audio: false },
+        ]
+
+    let stream = null
+    let lastError = null
+
+    for (const constraints of candidates) {
+      try {
+        console.log('[Camera] Trying constraints:', JSON.stringify(constraints))
+        stream = await navigator.mediaDevices.getUserMedia(constraints)
+        break
+      } catch (err) {
+        lastError = err
       }
     }
 
-    console.log('[Camera] Requesting with constraints:', JSON.stringify(constraints))
-    
-    currentStream.value = await navigator.mediaDevices.getUserMedia(constraints)
-    video.value.srcObject = currentStream.value
+    if (!stream) {
+      throw lastError || new Error('未能获取相机流')
+    }
 
-    // iOS 需要设置 muted 和 playsinline
+    // 先设置属性再挂流，提升 iOS 成功率
     video.value.muted = true
+    video.value.setAttribute('muted', 'true')
     video.value.playsInline = true
     video.value.setAttribute('playsinline', 'true')
     video.value.setAttribute('webkit-playsinline', 'true')
 
+    currentStream.value = stream
+    video.value.srcObject = currentStream.value
+
     await new Promise((resolve, reject) => {
+      let done = false
+      const timeout = setTimeout(() => {
+        if (!done) reject(new Error('视频加载超时'))
+      }, 10000)
+
       video.value.onloadedmetadata = () => {
-        video.value.play().then(resolve).catch(reject)
+        video.value.play().then(() => {
+          done = true
+          clearTimeout(timeout)
+          resolve()
+        }).catch(reject)
       }
       video.value.onerror = reject
-      // 超时处理
-      setTimeout(() => reject(new Error('视频加载超时')), 10000)
     })
 
     videoActive.value = true
@@ -194,36 +223,30 @@ const startCamera = async (facing) => {
     scanLineActive.value = false
 
     poseEngine.startLoop(video.value)
-    
+
     // 请求屏幕常亮 (移动端训练时不熄屏)
     requestWakeLock()
-
   } catch (err) {
-    console.error('[Camera Error]', err.name, err.message, err)
-    
+    console.error('[Camera Error]', err?.name, err?.message, err)
+
     let errorMsg = '相机启动失败'
-    
-    // iOS 特定错误处理
-    if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-      errorMsg = deviceType.value === 'ios' 
-        ? '请在设置 > Safari > 相机 中允许访问'
+
+    if (err.message && err.message.includes('HTTPS')) {
+      errorMsg = '请使用 HTTPS 打开页面（iPhone 必须）'
+    } else if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+      errorMsg = deviceType.value === 'ios'
+        ? '请在 iPhone 设置 > Safari > 相机 里允许访问，并刷新页面'
         : '请允许相机权限后刷新页面'
     } else if (err.name === 'NotFoundError') {
       errorMsg = '未找到相机设备'
     } else if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
-      errorMsg = '相机被占用或无法访问，请刷新重试'
+      errorMsg = '相机被占用，请关闭其他相机应用后重试'
     } else if (err.name === 'OverconstrainedError') {
-      errorMsg = '相机参数不支持，尝试使用后置摄像头'
-      // 尝试切换到 user 摄像头
-      if (facingMode.value === 'environment') {
-        facingMode.value = 'user'
-        setTimeout(() => startCamera('user'), 500)
-        return
-      }
+      errorMsg = '当前相机参数不支持，已建议改用默认相机'
     } else if (err.message && err.message.includes('超时')) {
       errorMsg = '相机启动超时，请刷新重试'
     }
-    
+
     updateBadge('error', '相机错误')
     loadingText.value = errorMsg
     loadingProgress.value = 0
