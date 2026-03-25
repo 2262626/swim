@@ -1,75 +1,87 @@
-# 游泳AI训练系统 (Vue 3 工程化版本)
+# 游泳AI骨骼识别系统
 
-基于 Vue 3 + Vite 重构的游泳AI骨骼识别系统。
+基于 **MediaPipe Pose** 的实时游泳者骨骼识别前端系统，专为游泳馆水面场景优化，无需安装 APP，手机浏览器直接运行。
+
+## 快速启动
+
+### 方式一：本地静态服务（推荐）
+```bash
+# 需要 Node.js
+npx serve .
+# 或
+python -m http.server 8080
+```
+然后用手机访问电脑 IP + 端口，例如：`http://192.168.1.100:8080`
+
+### 方式二：直接双击 index.html
+部分浏览器（Chrome）因安全策略限制摄像头权限，**建议用本地服务器方式**。
+
+---
 
 ## 项目结构
 
 ```
-swim-ai-system/
-├── index.html              # 入口 HTML
-├── package.json            # 项目依赖
-├── vite.config.js          # Vite 配置
-├── src/
-│   ├── main.js             # 应用入口
-│   ├── App.vue             # 根组件
-│   ├── assets/
-│   │   └── styles.css      # 全局样式
-│   ├── components/
-│   │   ├── TopBar.vue      # 顶部栏组件
-│   │   ├── BottomPanel.vue # 底部数据面板
-│   │   ├── SettingsDrawer.vue  # 设置抽屉
-│   │   └── LoadingOverlay.vue  # 加载遮罩
-│   └── composables/
-│       ├── usePoseEngine.js    # MediaPipe 姿态引擎
-│       ├── useSkeletonDraw.js  # 骨骼绘制
-│       └── useSwimAnalysis.js  # 游泳分析
+游泳Ai训练系统/
+├── index.html              # 主入口
+├── css/
+│   └── style.css           # 深海主题 UI 样式
+└── js/
+    ├── skeleton-draw.js    # 骨骼渲染（33点 + 分部位彩色）
+    ├── swim-analysis.js    # 泳姿识别、划臂计数、对称性评分
+    ├── pose-engine.js      # MediaPipe Pose 封装（热更新参数）
+    └── app.js              # 主控制器（UI 交互 + 数据联动）
 ```
 
-## 与原项目的对比
+---
 
-| 特性 | 原项目 | Vue 3 工程化版本 |
-|------|--------|------------------|
-| 架构 | 原生 JS + DOM 操作 | Vue 3 Composition API |
-| 构建工具 | 无 | Vite |
-| 状态管理 | 全局变量 | Vue Reactive |
-| 组件复用 | 无 | 组件化 |
-| 类型安全 | 无 | 部分类型推断 |
+## 核心功能
 
-## 安装和运行
+| 功能 | 说明 |
+|------|------|
+| 实时骨骼识别 | 33个关键点，分部位彩色渲染，外发光效果 |
+| 泳姿识别 | 自动区分自由泳 / 蛙泳 / 蝶泳 / 仰泳 |
+| 划臂计数 | 手腕过肩触发计数，防抖冷却 400ms |
+| 关节角度 | 左/右肩、肘关节实时角度 + 进度条 |
+| 身体对称评分 | 左右关节角度差值评估 |
+| FPS 监控 | 实时帧率显示 |
+| 置信度显示 | 主要关节置信度百分比标签 |
+| JSON 数据导出 | 含帧级关键点坐标 + 分析结果 |
 
-```bash
-# 进入项目目录
-cd swim-ai-system
+---
 
-# 安装依赖
-npm install
+## 游泳场景专用优化
 
-# 开发模式运行
-npm run dev
+- `minDetectionConfidence: 0.35` — 抗水面反光、身体半淹没遮挡
+- `minTrackingConfidence: 0.30` — 快速划水动作连续跟踪
+- `smoothLandmarks: true` — 运动平滑，消除抖动
+- 后置相机优先 (`facingMode: environment`)
+- 支持切换前/后置摄像头
 
-# 生产构建
-npm run build
+---
 
-# 预览生产构建
-npm run preview
-```
+## 设置面板
 
-## 主要功能
+点击右上角 ⚙️ 图标进入设置：
 
-- **实时骨骼识别**: 使用 MediaPipe Pose 进行人体姿态检测
-- **泳姿识别**: 自动识别自由泳、蛙泳、仰泳、蝶泳
-- **划臂计数**: 实时统计划臂次数
-- **关节角度**: 显示肘部、肩部等关键关节角度
-- **设置面板**: 可调整模型精度、置信度阈值、骨骼样式等
+- **模型精度**：快速(0) / 标准(1) / 精准(2)
+- **检测/跟踪阈值**：实时调整
+- **骨骼线宽 & 颜色**：4 种预设色
+- **只显示上半身**：适合水面半身视角
+- **置信度标签**：开/关
 
-## 浏览器要求
+---
 
-- 支持 WebRTC 的现代浏览器 (Chrome, Firefox, Safari, Edge)
-- 需要摄像头权限
+## 现场拍摄建议
+
+- 距离游泳者 **2–5 米** 效果最佳
+- 侧光或逆光拍摄，减少水面直射反光
+- 手持保持稳定，或固定在支架上
+- 白天自然光 > 室内顶灯
+
+---
 
 ## 技术栈
 
-- Vue 3 (Composition API)
-- Vite
-- MediaPipe Pose
-- CSS Variables
+- [MediaPipe Pose 0.5](https://google.github.io/mediapipe/solutions/pose) — 骨骼识别引擎
+- 原生 HTML5 / Canvas 2D — 零框架依赖
+- CSS Variables + Flexbox/Grid — 响应式布局
