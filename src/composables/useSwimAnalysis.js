@@ -45,7 +45,7 @@ export function useSwimAnalysis() {
     exportBuffer.length = 0
   }
 
-  const analyze = (landmarks, angles) => {
+  const analyze = (landmarks, angles, forcedStyle = null) => {
     if (!landmarks) return null
 
     const now = Date.now()
@@ -53,7 +53,7 @@ export function useSwimAnalysis() {
     frameBuffer.push({ now, landmarks: serializeLandmarks(landmarks) })
     if (frameBuffer.length > BUFFER_SIZE) frameBuffer.shift()
 
-    const style = classifyStyle(landmarks, angles)
+    const style = forcedStyle || classifyStyle(landmarks, angles)
     const phase = classifyPhaseByStyle(style, landmarks, angles)
 
     detectedStyle.value = style

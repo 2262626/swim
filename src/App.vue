@@ -45,6 +45,9 @@ const settings = ref({
   upperOnly: false,
 })
 
+const swimStyleOptions = ['自由泳', '蛙泳', '蝶泳', '仰泳']
+const selectedSwimStyle = ref('蝶泳')
+
 // ============ Composables ============
 const poseEngine = usePoseEngine()
 const { draw, getJointAngles, setConfig: setSkeletonConfig } = useSkeletonDraw()
@@ -475,8 +478,8 @@ onMounted(() => {
 
       const angles = getJointAngles(landmarks)
       
-      // 泳姿分析（保持流畅，用于计数）
-      analyze(landmarks, angles)
+      // 泳姿分析：使用用户手动选择的泳姿，不再自动识别泳姿类型
+      analyze(landmarks, angles, selectedSwimStyle.value)
       
       // 检测划臂计数变化，触发震动反馈
       if (strokeCount.value > prevStrokeCount) {
@@ -569,6 +572,22 @@ const confidencePercent = computed(() => Math.round(avgConfidence.value * 100) +
 
     <!-- 顶部栏 -->
     <TopBar @settings="toggleSettings" @export="handleExport" @import-video="openVideoImporter" />
+
+    <!-- 手动选择泳姿（固定识别目标，不自动分类） -->
+    <div class="swim-style-manual">
+      <span class="style-label">当前泳姿：</span>
+      <div class="style-buttons">
+        <button
+          v-for="style in swimStyleOptions"
+          :key="style"
+          class="style-btn"
+          :class="{ active: selectedSwimStyle === style }"
+          @click="selectedSwimStyle = style"
+        >
+          {{ style }}
+        </button>
+      </div>
+    </div>
 
     <!-- 底部数据面板 -->
     <BottomPanel
