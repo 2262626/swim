@@ -12,10 +12,13 @@ import { useMobileFeatures } from './composables/useMobileFeatures.js'
 // ============ Refs ============
 const video = ref(null)
 const canvas = ref(null)
+const videoFileInput = ref(null)
 let ctx = null
 
 // ============ State ============
 const currentStream = ref(null)
+const currentVideoURL = ref('')
+const analysisMode = ref('camera') // camera | video
 const facingMode = ref('environment')
 const personDetected = ref(false)
 let noPersonTimer = null
@@ -133,6 +136,19 @@ const resizeCanvas = () => {
 
 const startCamera = async (facing) => {
   try {
+    analysisMode.value = 'camera'
+
+    if (currentVideoURL.value) {
+      URL.revokeObjectURL(currentVideoURL.value)
+      currentVideoURL.value = ''
+    }
+
+    if (video.value) {
+      video.value.pause()
+      video.value.removeAttribute('src')
+      video.value.load()
+    }
+
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       throw new Error('浏览器不支持相机 API')
     }
@@ -302,6 +318,85 @@ const handleExport = () => {
   exportJSON()
 }
 
+const openVideoImporter = () => {
+  if (videoFileInput.value) {
+    videoFileInput.value.value = ''
+    videoFileInput.value.click()
+  }
+}
+
+const stopCameraStream = () => {
+  if (currentStream.value) {
+    currentStream.value.getTracks().forEach(t => t.stop())
+    currentStream.value = null
+  }
+}
+
+const switchToVideoMode = async (file) => {
+  if (!file || !video.value) return
+
+  try {
+    poseEngine.stopLoop()
+    stopCameraStream()
+
+    if (currentVideoURL.value) {
+      URL.revokeObjectURL(currentVideoURL.value)
+      currentVideoURL.value = ''
+    }
+
+    const objectURL = URL.createObjectURL(file)
+    currentVideoURL.value = objectURL
+    analysisMode.value = 'video'
+
+    video.value.muted = true
+    video.value.setAttribute('muted', 'true')
+    video.value.playsInline = true
+    video.value.setAttribute('playsinline', 'true')
+    video.value.setAttribute('webkit-playsinline', 'true')
+    video.value.loop = false
+    video.value.srcObject = null
+    video.value.src = objectURL
+
+    await new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => reject(new Error('视频加载超时')), 10000)
+      video.value.onloadedmetadata = () => {
+        clearTimeout(timeout)
+        resolve()
+      }
+      video.value.onerror = reject
+    })
+
+    await video.value.play()
+
+    videoActive.value = true
+    resizeCanvas()
+    updateBadge('live', '视频分析中')
+    noPersonHintVisible.value = false
+    scanLineActive.value = false
+
+    reset()
+    poseEngine.startLoop(video.value)
+  } catch (err) {
+    console.error('[Video Import Error]', err)
+    updateBadge('error', '视频导入失败')
+    loadingText.value = '视频导入失败，请更换文件重试'
+  }
+}
+
+const handleVideoImport = async (event) => {
+  const file = event?.target?.files?.[0]
+  if (!file) return
+
+  const isVideo = file.type.startsWith('video/') || /\.(mp4|mov|m4v|webm|avi)$/i.test(file.name)
+  if (!isVideo) {
+    updateBadge('error', '文件格式错误')
+    loadingText.value = '请选择视频文件（mp4/mov/webm）'
+    return
+  }
+
+  await switchToVideoMode(file)
+}
+
 const handleReset = () => {
   reset()
   // 震动反馈
@@ -309,6 +404,12 @@ const handleReset = () => {
 }
 
 const toggleCamera = () => {
+  if (analysisMode.value === 'video') {
+    startCamera(facingMode.value)
+    vibrate(30)
+    return
+  }
+
   facingMode.value = facingMode.value === 'environment' ? 'user' : 'environment'
   poseEngine.stopLoop()
   startCamera(facingMode.value)
@@ -406,9 +507,13 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
-  if (currentStream.value) {
-    currentStream.value.getTracks().forEach(t => t.stop())
+  stopCameraStream()
+
+  if (currentVideoURL.value) {
+    URL.revokeObjectURL(currentVideoURL.value)
+    currentVideoURL.value = ''
   }
+
   poseEngine.stopLoop()
   window.removeEventListener('resize', resizeCanvas)
   clearTimeout(noPersonTimer)
@@ -463,7 +568,7 @@ const confidencePercent = computed(() => Math.round(avgConfidence.value * 100) +
     </div>
 
     <!-- 顶部栏 -->
-    <TopBar @settings="toggleSettings" @export="handleExport" />
+    <TopBar @settings="toggleSettings" @export="handleExport" @import-video="openVideoImporter" />
 
     <!-- 底部数据面板 -->
     <BottomPanel
@@ -490,6 +595,14 @@ const confidencePercent = computed(() => Math.round(avgConfidence.value * 100) +
 
     <!-- 遮罩 -->
     <div class="overlay" :class="{ visible: isSettingsOpen }" @click="isSettingsOpen = false"></div>
+
+    <input
+      ref="videoFileInput"
+      type="file"
+      accept="video/*,.mp4,.mov,.m4v,.webm,.avi"
+      style="display: none"
+      @change="handleVideoImport"
+    >
 
     <!-- 加载遮罩 -->
     <LoadingOverlay

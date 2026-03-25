@@ -1,5 +1,9 @@
 <script setup>
-const emit = defineEmits(['settings', 'export'])
+const emit = defineEmits(['settings', 'export', 'import-video'])
+
+const triggerVideoImport = () => {
+  emit('import-video')
+}
 </script>
 
 <template>
@@ -12,6 +16,12 @@ const emit = defineEmits(['settings', 'export'])
       <span>游泳AI骨骼识别</span>
     </div>
     <div class="top-actions">
+      <button class="icon-btn" title="导入视频分析" @click="triggerVideoImport">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M23 7l-7 5 7 5V7z"/>
+          <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+        </svg>
+      </button>
       <button class="icon-btn" title="设置" @click="$emit('settings')">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <circle cx="12" cy="12" r="3"/>
