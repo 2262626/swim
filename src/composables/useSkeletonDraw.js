@@ -20,47 +20,23 @@ export const KP = {
   L_FOOT: 31,     R_FOOT: 32,
 }
 
-// 骨骼连接
-const CONNECTIONS_FULL = [
-  // 脸
-  [KP.L_EAR, KP.L_EYE], [KP.R_EAR, KP.R_EYE],
-  [KP.L_EYE, KP.NOSE],  [KP.R_EYE, KP.NOSE],
-  // 躯干
+// 游泳固定点位（只保留上肢+躯干核心，类似跳绳项目的固定关键位）
+const CONNECTIONS_SWIM_FIXED = [
   [KP.L_SHOULDER, KP.R_SHOULDER],
+  [KP.L_HIP, KP.R_HIP],
   [KP.L_SHOULDER, KP.L_HIP],
   [KP.R_SHOULDER, KP.R_HIP],
-  [KP.L_HIP, KP.R_HIP],
-  // 左臂
   [KP.L_SHOULDER, KP.L_ELBOW],
   [KP.L_ELBOW, KP.L_WRIST],
-  [KP.L_WRIST, KP.L_INDEX],
-  // 右臂
   [KP.R_SHOULDER, KP.R_ELBOW],
   [KP.R_ELBOW, KP.R_WRIST],
-  [KP.R_WRIST, KP.R_INDEX],
-  // 左腿
-  [KP.L_HIP, KP.L_KNEE],
-  [KP.L_KNEE, KP.L_ANKLE],
-  [KP.L_ANKLE, KP.L_FOOT],
-  // 右腿
-  [KP.R_HIP, KP.R_KNEE],
-  [KP.R_KNEE, KP.R_ANKLE],
-  [KP.R_ANKLE, KP.R_FOOT],
 ]
 
-const CONNECTIONS_UPPER = [
-  [KP.L_EAR, KP.L_EYE], [KP.R_EAR, KP.R_EYE],
-  [KP.L_EYE, KP.NOSE],  [KP.R_EYE, KP.NOSE],
-  [KP.L_SHOULDER, KP.R_SHOULDER],
-  [KP.L_SHOULDER, KP.L_HIP],
-  [KP.R_SHOULDER, KP.R_HIP],
-  [KP.L_HIP, KP.R_HIP],
-  [KP.L_SHOULDER, KP.L_ELBOW],
-  [KP.L_ELBOW, KP.L_WRIST],
-  [KP.L_WRIST, KP.L_INDEX],
-  [KP.R_SHOULDER, KP.R_ELBOW],
-  [KP.R_ELBOW, KP.R_WRIST],
-  [KP.R_WRIST, KP.R_INDEX],
+const POINTS_SWIM_FIXED = [
+  KP.L_SHOULDER, KP.R_SHOULDER,
+  KP.L_ELBOW, KP.R_ELBOW,
+  KP.L_WRIST, KP.R_WRIST,
+  KP.L_HIP, KP.R_HIP,
 ]
 
 const SEGMENT_COLORS = {
@@ -94,8 +70,8 @@ const config = ref({
   dotColor: '#ffffff',
   dotRadius: 5,
   showLabels: true,
-  upperOnly: false,
-  minVisibility: 0.3,
+  upperOnly: true,
+  minVisibility: 0.35,
   // 性能优化：移动端禁用阴影
   enableShadow: !(/Android|webOS|iPhone|iPad|iPod/i.test(navigator.userAgent)),
 })
@@ -116,9 +92,9 @@ export function useSkeletonDraw() {
   const draw = (ctx, landmarks, canvasW, canvasH) => {
     if (!landmarks || landmarks.length === 0) return
 
-    const connections = config.value.upperOnly ? CONNECTIONS_UPPER : CONNECTIONS_FULL
+    const connections = CONNECTIONS_SWIM_FIXED
 
-    // 1. 骨骼连线
+    // 1. 固定关键位连线
     connections.forEach(([si, ei]) => {
       const s = landmarks[si]
       const e = landmarks[ei]
@@ -148,8 +124,9 @@ export function useSkeletonDraw() {
       ctx.restore()
     })
 
-    // 2. 关键点
-    landmarks.forEach((lm, idx) => {
+    // 2. 固定关键点（只绘制核心点位）
+    POINTS_SWIM_FIXED.forEach((idx) => {
+      const lm = landmarks[idx]
       if (!lm || lm.visibility < config.value.minVisibility) return
 
       const x = lm.x * canvasW
@@ -159,21 +136,12 @@ export function useSkeletonDraw() {
       ctx.save()
       ctx.globalAlpha = alpha
 
-      const isKeyJoint = [
-        KP.L_SHOULDER, KP.R_SHOULDER,
-        KP.L_ELBOW,    KP.R_ELBOW,
-        KP.L_WRIST,    KP.R_WRIST,
-        KP.L_HIP,      KP.R_HIP,
-        KP.L_KNEE,     KP.R_KNEE,
-        KP.L_ANKLE,    KP.R_ANKLE,
-      ].includes(idx)
-
-      const r = isKeyJoint ? config.value.dotRadius + 2 : config.value.dotRadius - 1
-      const dotColor = config.value.lineColor || (isKeyJoint ? '#ffffff' : 'rgba(255,255,255,0.6)')
+      const r = config.value.dotRadius + 2
+      const dotColor = config.value.lineColor || '#ffffff'
 
       if (config.value.enableShadow) {
         ctx.shadowColor = dotColor
-        ctx.shadowBlur = isKeyJoint ? 10 : 4
+        ctx.shadowBlur = 8
       }
 
       ctx.beginPath()
@@ -181,14 +149,12 @@ export function useSkeletonDraw() {
       ctx.fillStyle = dotColor
       ctx.fill()
 
-      if (isKeyJoint) {
-        ctx.beginPath()
-        ctx.arc(x, y, r + 3, 0, Math.PI * 2)
-        ctx.strokeStyle = dotColor
-        ctx.globalAlpha = alpha * 0.4
-        ctx.lineWidth = 1.5
-        ctx.stroke()
-      }
+      ctx.beginPath()
+      ctx.arc(x, y, r + 3, 0, Math.PI * 2)
+      ctx.strokeStyle = dotColor
+      ctx.globalAlpha = alpha * 0.35
+      ctx.lineWidth = 1.2
+      ctx.stroke()
 
       ctx.restore()
     })
