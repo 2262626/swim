@@ -24,8 +24,9 @@ export function useSwimAnalysis() {
   const detectedPhase = ref(STROKE_PHASES.UNKNOWN)
   const detectedStroke = ref(`${STROKE_TYPES.UNKNOWN}·${STROKE_PHASES.UNKNOWN}`)
   const strokeHistory = ref([])
-  const exportBuffer = ref([])
-  const frameBuffer = ref([])
+  // 高频缓存使用普通数组，避免每帧触发响应式开销
+  const exportBuffer = []
+  const frameBuffer = []
 
   let lastStrokeTime = 0
 
@@ -40,8 +41,8 @@ export function useSwimAnalysis() {
     detectedStyle.value = STROKE_TYPES.UNKNOWN
     detectedPhase.value = STROKE_PHASES.UNKNOWN
     detectedStroke.value = `${detectedStyle.value}·${detectedPhase.value}`
-    frameBuffer.value = []
-    exportBuffer.value = []
+    frameBuffer.length = 0
+    exportBuffer.length = 0
   }
 
   const analyze = (landmarks, angles) => {
@@ -49,8 +50,8 @@ export function useSwimAnalysis() {
 
     const now = Date.now()
 
-    frameBuffer.value.push({ now, landmarks: serializeLandmarks(landmarks) })
-    if (frameBuffer.value.length > BUFFER_SIZE) frameBuffer.value.shift()
+    frameBuffer.push({ now, landmarks: serializeLandmarks(landmarks) })
+    if (frameBuffer.length > BUFFER_SIZE) frameBuffer.shift()
 
     const style = classifyStyle(landmarks, angles)
     const phase = classifyPhaseByStyle(style, landmarks, angles)
@@ -59,7 +60,7 @@ export function useSwimAnalysis() {
     detectedPhase.value = phase
     detectedStroke.value = `${style}·${phase}`
 
-    if (frameBuffer.value.length >= 4) {
+    if (frameBuffer.length >= 4) {
       detectArmStroke(landmarks, now)
     }
 
@@ -77,8 +78,8 @@ export function useSwimAnalysis() {
       timestamp: now,
     }
 
-    if (exportBuffer.value.length < MAX_EXPORT) {
-      exportBuffer.value.push(result)
+    if (exportBuffer.length < MAX_EXPORT) {
+      exportBuffer.push(result)
     }
 
     return result
@@ -173,14 +174,14 @@ export function useSwimAnalysis() {
 
   const detectArmStroke = (landmarks, now) => {
     if (now - lastStrokeTime < STROKE_COOLDOWN_MS) return
-    if (frameBuffer.value.length < 3) return
+    if (frameBuffer.length < 3) return
 
     const lw = landmarks[KP.L_WRIST]
     const rw = landmarks[KP.R_WRIST]
     const ls = landmarks[KP.L_SHOULDER]
     const rs = landmarks[KP.R_SHOULDER]
 
-    const prev = frameBuffer.value[frameBuffer.value.length - 3]
+    const prev = frameBuffer[frameBuffer.length - 3]
     const prevLW = prev.landmarks[KP.L_WRIST]
     const prevRW = prev.landmarks[KP.R_WRIST]
 
@@ -248,7 +249,7 @@ export function useSwimAnalysis() {
       totalStrokes: strokeCount.value,
       detectedStyle: detectedStyle.value,
       detectedPhase: detectedPhase.value,
-      frames: exportBuffer.value,
+      frames: exportBuffer,
     }
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
     const url = URL.createObjectURL(blob)

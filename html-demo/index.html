@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>游泳AI训练系统 · 骨骼识别</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<!-- ===== 主视图层 ===== -->
+<div id="app">
+
+  <!-- 视频 + 骨骼画布 -->
+  <div class="video-wrapper">
+    <video id="video" autoplay muted playsinline></video>
+    <canvas id="output-canvas"></canvas>
+
+    <!-- 扫描线动画（模型加载中） -->
+    <div class="scan-line" id="scan-line"></div>
+
+    <!-- 右上角徽章 -->
+    <div class="corner-badge">
+      <span class="badge-dot" id="badge-dot"></span>
+      <span id="badge-label">初始化中</span>
+    </div>
+  </div>
+
+  <!-- ===== 顶部标题栏 ===== -->
+  <header class="top-bar">
+    <div class="logo">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+        <path d="M2 12C2 12 5 6 12 6C19 6 22 12 22 12C22 12 19 18 12 18C5 18 2 12 2 12Z" stroke="#00e5ff" stroke-width="1.8"/>
+        <circle cx="12" cy="12" r="3" fill="#00e5ff"/>
+      </svg>
+      <span>游泳AI骨骼识别</span>
+    </div>
+    <div class="top-actions">
+      <button class="icon-btn" id="btn-settings" title="设置">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+        </svg>
+      </button>
+      <button class="icon-btn" id="btn-export" title="导出数据">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- ===== 底部数据面板 ===== -->
+  <div class="bottom-panel">
+
+    <!-- 数据卡片行 -->
+    <div class="stats-row">
+      <div class="stat-card" id="card-stroke">
+        <div class="stat-label">泳姿</div>
+        <div class="stat-value" id="val-stroke">—</div>
+      </div>
+      <div class="stat-card highlight" id="card-count">
+        <div class="stat-label">划臂次数</div>
+        <div class="stat-value" id="val-count">0</div>
+      </div>
+      <div class="stat-card" id="card-fps">
+        <div class="stat-label">帧率</div>
+        <div class="stat-value" id="val-fps">0 fps</div>
+      </div>
+      <div class="stat-card" id="card-conf">
+        <div class="stat-label">置信度</div>
+        <div class="stat-value" id="val-conf">—</div>
+      </div>
+    </div>
+
+    <!-- 关节角度条 -->
+    <div class="angle-row">
+      <div class="angle-item">
+        <span class="angle-label">左肘</span>
+        <div class="angle-bar"><div class="angle-fill" id="bar-left-elbow"></div></div>
+        <span class="angle-num" id="num-left-elbow">—°</span>
+      </div>
+      <div class="angle-item">
+        <span class="angle-label">右肘</span>
+        <div class="angle-bar"><div class="angle-fill" id="bar-right-elbow"></div></div>
+        <span class="angle-num" id="num-right-elbow">—°</span>
+      </div>
+      <div class="angle-item">
+        <span class="angle-label">左肩</span>
+        <div class="angle-bar"><div class="angle-fill" id="bar-left-shoulder"></div></div>
+        <span class="angle-num" id="num-left-shoulder">—°</span>
+      </div>
+      <div class="angle-item">
+        <span class="angle-label">右肩</span>
+        <div class="angle-bar"><div class="angle-fill" id="bar-right-shoulder"></div></div>
+        <span class="angle-num" id="num-right-shoulder">—°</span>
+      </div>
+    </div>
+
+    <!-- 底部按钮 -->
+    <div class="btn-row">
+      <button class="action-btn danger" id="btn-reset">重置计数</button>
+      <button class="action-btn primary" id="btn-camera">切换摄像头</button>
+      <button class="action-btn" id="btn-pause">暂停</button>
+    </div>
+  </div>
+
+  <!-- ===== 设置抽屉 ===== -->
+  <div class="settings-drawer" id="settings-drawer">
+    <div class="drawer-header">
+      <h3>识别设置</h3>
+      <button class="icon-btn" id="btn-close-settings">✕</button>
+    </div>
+
+    <div class="setting-group">
+      <label>模型精度</label>
+      <div class="seg-control" id="seg-complexity">
+        <button class="seg-btn active" data-val="0">快速</button>
+        <button class="seg-btn" data-val="1">标准</button>
+        <button class="seg-btn" data-val="2">精准</button>
+      </div>
+    </div>
+
+    <div class="setting-group">
+      <label>检测置信阈值 <span id="lbl-detect">0.35</span></label>
+      <input type="range" id="range-detect" min="0.1" max="0.9" step="0.05" value="0.35">
+    </div>
+
+    <div class="setting-group">
+      <label>跟踪置信阈值 <span id="lbl-track">0.30</span></label>
+      <input type="range" id="range-track" min="0.1" max="0.9" step="0.05" value="0.30">
+    </div>
+
+    <div class="setting-group">
+      <label>骨骼线宽 <span id="lbl-linewidth">3</span>px</label>
+      <input type="range" id="range-linewidth" min="1" max="8" step="1" value="3">
+    </div>
+
+    <div class="setting-group">
+      <label>骨骼颜色</label>
+      <div class="color-picker-row">
+        <button class="color-swatch active" data-color="#00FFFC" style="background:#00FFFC"></button>
+        <button class="color-swatch" data-color="#FF006E" style="background:#FF006E"></button>
+        <button class="color-swatch" data-color="#FFD600" style="background:#FFD600"></button>
+        <button class="color-swatch" data-color="#76FF03" style="background:#76FF03"></button>
+      </div>
+    </div>
+
+    <div class="setting-group">
+      <label>显示置信度标签</label>
+      <label class="toggle">
+        <input type="checkbox" id="chk-show-labels" checked>
+        <span class="toggle-slider"></span>
+      </label>
+    </div>
+
+    <div class="setting-group">
+      <label>只显示上半身</label>
+      <label class="toggle">
+        <input type="checkbox" id="chk-upper-only">
+        <span class="toggle-slider"></span>
+      </label>
+    </div>
+
+    <button class="action-btn primary full-width" id="btn-apply-settings">应用设置</button>
+  </div>
+
+  <!-- 设置遮罩 -->
+  <div class="overlay" id="overlay"></div>
+
+  <!-- 加载遮罩 -->
+  <div class="loading-overlay" id="loading-overlay">
+    <div class="loading-box">
+      <div class="loading-spinner"></div>
+      <p id="loading-text">正在加载 MediaPipe 模型...</p>
+      <div class="loading-bar-wrap"><div class="loading-bar-inner" id="loading-bar"></div></div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ===== 脚本 ===== -->
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
+<script src="js/skeleton-draw.js"></script>
+<script src="js/swim-analysis.js"></script>
+<script src="js/pose-engine.js"></script>
+<script src="js/app.js"></script>
+
+</body>
+</html>

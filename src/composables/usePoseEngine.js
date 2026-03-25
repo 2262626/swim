@@ -29,15 +29,16 @@ export function usePoseEngine() {
   let onReadyCb = null
   let onErrorCb = null
 
-  const fpsSamples = ref([])
+  // 高频路径避免使用响应式对象，减少每帧开销
+  const fpsSamples = []
   let lastFrameTime = 0
 
   const _calcFPS = (now) => {
-    fpsSamples.value.push(now)
-    if (fpsSamples.value.length > 30) fpsSamples.value.shift()
-    if (fpsSamples.value.length < 2) return 0
-    const span = (fpsSamples.value[fpsSamples.value.length - 1] - fpsSamples.value[0]) / 1000
-    return Math.round((fpsSamples.value.length - 1) / span)
+    fpsSamples.push(now)
+    if (fpsSamples.length > 30) fpsSamples.shift()
+    if (fpsSamples.length < 2) return 0
+    const span = (fpsSamples[fpsSamples.length - 1] - fpsSamples[0]) / 1000
+    return Math.round((fpsSamples.length - 1) / span)
   }
 
   const _handleResults = (results) => {
@@ -85,6 +86,11 @@ export function usePoseEngine() {
 
   const startLoop = (videoEl) => {
     if (!pose || !videoEl) return
+
+    // 避免重复启动多个 RAF 循环
+    stopLoop()
+    frameCount = 0
+    isProcessing = false
 
     async function loop() {
       frameCount++
