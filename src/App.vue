@@ -788,6 +788,8 @@ const getCapturePreviewIndex = (id) => {
   const index = captureList.value.findIndex((item) => item.id === id)
   return index < 0 ? 0 : index
 }
+const isTechniquePanelCollapsed = ref(false)
+const techniqueToggleText = computed(() => (isTechniquePanelCollapsed.value ? '展开' : '收起'))
 const panelTitle = computed(() => {
   const phase = detectedStroke.value?.split('·')?.[1] || ''
   if (phase === '准备姿势') return '预备姿势标准'
@@ -836,12 +838,17 @@ const techniquePanelItems = computed(() => {
         <span>{{ badgeLabel }}</span>
       </div>
 
-      <div class="freestyle-technique-panel">
+      <div class="freestyle-technique-panel" :class="{ collapsed: isTechniquePanelCollapsed }">
         <div class="technique-header">
           <span>{{ panelTitle }}</span>
-          <strong>{{ currentAssessment.score ?? 0 }}分</strong>
+          <div class="technique-header-actions">
+            <strong>{{ currentAssessment.score ?? 0 }}分</strong>
+            <button class="technique-toggle-btn" @click="isTechniquePanelCollapsed = !isTechniquePanelCollapsed">
+              {{ techniqueToggleText }}
+            </button>
+          </div>
         </div>
-        <div class="technique-items">
+        <div v-show="!isTechniquePanelCollapsed" class="technique-items">
           <div
             v-for="item in techniquePanelItems"
             :key="item.key"

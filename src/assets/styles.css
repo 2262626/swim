@@ -236,6 +236,31 @@ html, body {
   color: #00e5ff;
 }
 
+.technique-header-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.technique-toggle-btn {
+  border: 1px solid rgba(0, 229, 255, 0.35);
+  background: rgba(0, 229, 255, 0.12);
+  color: #bff7ff;
+  border-radius: 999px;
+  font-size: 11px;
+  line-height: 1;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+
+.technique-toggle-btn:active {
+  transform: scale(0.96);
+}
+
+.freestyle-technique-panel.collapsed {
+  width: 180px;
+}
+
 .technique-items {
   display: flex;
   flex-direction: column;
@@ -869,20 +894,85 @@ input[type="range"]::-webkit-slider-thumb {
   .bottom-panel {
     position: fixed;
     right: 0; top: 0; bottom: 0;
-    width: 220px;
+    width: min(280px, 42vw);
     border-top: none;
     border-left: 1px solid var(--border);
     display: flex;
     flex-direction: column;
-    justify-content: space-between;
-    padding: 52px 10px 14px;
+    justify-content: flex-start;
+    gap: 8px;
+    padding: 52px 10px 12px;
+    overflow-y: auto;
   }
 
-  .stats-row { grid-template-columns: repeat(2, 1fr); }
-  .angle-row { grid-template-columns: 1fr; }
-  .btn-row { flex-direction: column; }
+  .panel-style-manual {
+    margin-bottom: 6px;
+  }
 
-  .video-wrapper { margin-right: 220px; }
+  .style-label {
+    display: block;
+    width: 100%;
+    margin-right: 0;
+    font-size: 11px;
+  }
+
+  .style-buttons {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+    gap: 6px;
+  }
+
+  .style-btn {
+    width: 100%;
+    text-align: center;
+    padding: 5px 4px;
+    font-size: 11px;
+  }
+
+  .stats-row {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 6px;
+    margin-bottom: 8px;
+  }
+
+  .stat-card {
+    padding: 6px 6px;
+  }
+
+  .stat-label {
+    font-size: 10px;
+    margin-bottom: 3px;
+  }
+
+  .stat-value {
+    font-size: 16px;
+  }
+
+  .angle-row {
+    grid-template-columns: 1fr;
+    gap: 5px;
+    margin-bottom: 8px;
+  }
+
+  .angle-label,
+  .angle-num {
+    font-size: 10px;
+  }
+
+  .btn-row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  .action-btn {
+    min-height: 36px;
+    height: 36px;
+    font-size: 12px;
+  }
+
+  .video-wrapper { margin-right: min(280px, 42vw); }
 }
 
 /* ============================================
@@ -1028,7 +1118,7 @@ input[type="range"]::-webkit-slider-thumb {
   }
   
   .video-wrapper {
-    margin-right: calc(220px + env(safe-area-inset-right));
+    margin-right: calc(min(280px, 42vw) + env(safe-area-inset-right));
   }
 }
 
