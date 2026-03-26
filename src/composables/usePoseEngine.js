@@ -8,14 +8,14 @@ export function usePoseEngine() {
 
   // 检测是否为移动设备
   const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
-  
+
   // 跳帧控制（在发送给模型前生效）
   let frameCount = 0
-  const skipFrames = isMobile ? 2 : 0  // 移动端每 3 帧送一次模型
+  const skipFrames = isMobile ? 2 : 0 // 移动端每 3 帧送 1 次模型
   let isProcessing = false
 
   const currentOptions = ref({
-    modelComplexity: isMobile ? 0 : 1,  // 移动端默认快速模式
+    modelComplexity: isMobile ? 0 : 1, // 移动端默认快速模式
     smoothLandmarks: true,
     enableSegmentation: false,
     smoothSegmentation: false,
@@ -78,7 +78,6 @@ export function usePoseEngine() {
 
       isReady.value = true
       if (onReadyCb) onReadyCb()
-
     } catch (err) {
       if (onErrorCb) onErrorCb(err)
     }

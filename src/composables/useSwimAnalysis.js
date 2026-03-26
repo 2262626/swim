@@ -10,6 +10,7 @@ const STROKE_TYPES = {
 }
 
 const STROKE_PHASES = {
+  PREP: '准备姿势',
   ENTRY: '入水',
   CATCH: '抱水',
   PULL: '推水',
@@ -84,6 +85,23 @@ export function useSwimAnalysis() {
   let lastExportTime = 0
   let lastExportStrokeCount = 0
 
+  const setUnknownDetection = () => {
+    detectedStyle.value = STROKE_TYPES.UNKNOWN
+    detectedPhase.value = STROKE_PHASES.UNKNOWN
+    detectedStroke.value = `${detectedStyle.value}·${detectedPhase.value}`
+  }
+
+  const hasReliablePose = (landmarks) => {
+    if (!Array.isArray(landmarks) || landmarks.length < 29) return false
+
+    const mustHave = [KP.L_SHOULDER, KP.R_SHOULDER, KP.L_HIP, KP.R_HIP]
+    const coreReady = mustHave.every((idx) => landmarks[idx] && (landmarks[idx].visibility ?? 0) > 0.38)
+    if (!coreReady) return false
+
+    const visibleCount = landmarks.reduce((count, lm) => count + ((lm && (lm.visibility ?? 0) > 0.28) ? 1 : 0), 0)
+    return visibleCount >= 8
+  }
+
   const reset = () => {
     strokeCount.value = 0
     strokeHistory.value = []
@@ -99,7 +117,21 @@ export function useSwimAnalysis() {
   }
 
   const analyze = (landmarks, angles, forcedStyle = null) => {
-    if (!landmarks) return null
+    if (!landmarks || !hasReliablePose(landmarks)) {
+      setUnknownDetection()
+      return {
+        style: STROKE_TYPES.UNKNOWN,
+        phase: STROKE_PHASES.UNKNOWN,
+        stroke: detectedStroke.value,
+        strokeCount: strokeCount.value,
+        strokeRate: calcStrokeRate(),
+        symmetry: calcSymmetry(angles),
+        angles,
+        standardName: '通用规则',
+        assessment: { score: null, items: [] },
+        timestamp: Date.now(),
+      }
+    }
 
     const now = Date.now()
 
@@ -188,7 +220,13 @@ export function useSwimAnalysis() {
     const lw = landmarks[KP.L_WRIST]
     const rw = landmarks[KP.R_WRIST]
 
-    if (!ls || !rs || !lw || !rw) return STROKE_PHASES.UNKNOWN
+    if (!ls || !rs) return STROKE_PHASES.UNKNOWN
+
+    if (isPrepPose(landmarks, angles)) {
+      return STROKE_PHASES.PREP
+    }
+
+    if (!lw || !rw) return STROKE_PHASES.UNKNOWN
 
     const shoulderY = (ls.y + rs.y) / 2
     const leftDy = lw.y - shoulderY
@@ -228,7 +266,58 @@ export function useSwimAnalysis() {
     return STROKE_PHASES.ENTRY
   }
 
+  const isPrepPose = (landmarks, angles) => {
+    const ls = landmarks[KP.L_SHOULDER]
+    const rs = landmarks[KP.R_SHOULDER]
+    const lw = landmarks[KP.L_WRIST]
+    const rw = landmarks[KP.R_WRIST]
+    const lh = landmarks[KP.L_HIP]
+    const rh = landmarks[KP.R_HIP]
+    const la = landmarks[KP.L_ANKLE]
+    const ra = landmarks[KP.R_ANKLE]
+    const nose = landmarks[KP.NOSE]
+
+    if (!ls || !rs || !lh || !rh || !la || !ra) return false
+
+    const shoulderY = (ls.y + rs.y) / 2
+    const hipY = (lh.y + rh.y) / 2
+    const ankleY = (la.y + ra.y) / 2
+    const torsoStanding = ankleY - shoulderY > 0.16
+    const hipBelowShoulders = hipY > shoulderY + 0.05
+
+    const leftWristReady =
+      !!lw &&
+      lw.y > shoulderY + 0.06 &&
+      lw.y < ankleY + 0.1 &&
+      Math.abs(lw.x - ls.x) < 0.34
+    const rightWristReady =
+      !!rw &&
+      rw.y > shoulderY + 0.06 &&
+      rw.y < ankleY + 0.1 &&
+      Math.abs(rw.x - rs.x) < 0.34
+    const wristReadyCount = (leftWristReady ? 1 : 0) + (rightWristReady ? 1 : 0)
+
+    const leftElbow = angles.leftElbow ?? null
+    const rightElbow = angles.rightElbow ?? null
+    const leftElbowRelaxed = leftElbow == null || leftElbow > 100
+    const rightElbowRelaxed = rightElbow == null || rightElbow > 100
+    const elbowsRelaxed = leftElbowRelaxed && rightElbowRelaxed
+    const headRelaxed = nose ? nose.y > shoulderY - 0.06 : true
+
+    return (
+      wristReadyCount >= 1 &&
+      torsoStanding &&
+      hipBelowShoulders &&
+      elbowsRelaxed &&
+      headRelaxed
+    )
+  }
+
   const evaluateTechnique = (style, phase, landmarks, angles, standard) => {
+    if (phase === STROKE_PHASES.PREP) {
+      return evaluatePrepPose(landmarks, angles)
+    }
+
     if (!standard) return { score: null, items: [] }
 
     if (style === STROKE_TYPES.BUTTERFLY) {
@@ -245,6 +334,41 @@ export function useSwimAnalysis() {
     }
 
     return { score: null, items: [] }
+  }
+
+  const evaluatePrepPose = (landmarks, angles) => {
+    const ls = landmarks[KP.L_SHOULDER]
+    const rs = landmarks[KP.R_SHOULDER]
+    const lw = landmarks[KP.L_WRIST]
+    const rw = landmarks[KP.R_WRIST]
+    const lh = landmarks[KP.L_HIP]
+    const rh = landmarks[KP.R_HIP]
+    const la = landmarks[KP.L_ANKLE]
+    const ra = landmarks[KP.R_ANKLE]
+    const nose = landmarks[KP.NOSE]
+
+    if (!ls || !rs || !lw || !rw || !lh || !rh || !la || !ra) {
+      return { score: null, items: [] }
+    }
+
+    const shoulderY = (ls.y + rs.y) / 2
+    const hipY = (lh.y + rh.y) / 2
+    const ankleY = (la.y + ra.y) / 2
+    const ankleWidth = Math.abs(la.x - ra.x)
+    const shoulderWidth = Math.abs(ls.x - rs.x)
+
+    const handsDown = lw.y > shoulderY + 0.08 && rw.y > shoulderY + 0.08
+    const armsRelaxed = (angles.leftElbow ?? 180) > 130 && (angles.rightElbow ?? 180) > 130
+    const headRelaxed = nose ? nose.y > shoulderY - 0.06 : true
+    const feetStable = shoulderWidth > 0 ? ankleWidth >= shoulderWidth * 0.45 && ankleWidth <= shoulderWidth * 1.45 : false
+    const bodyReady = ankleY - shoulderY > 0.16 && hipY > shoulderY + 0.05
+
+    return makeAssessment([
+      createItem('prepBody', '身体准备', bodyReady, '站姿稳定，重心准备充分', '身体姿态不稳或未进入准备站姿'),
+      createItem('prepArms', '手臂放松', handsDown && armsRelaxed, '手臂自然下垂并保持放松', '手臂抬起或过度弯曲'),
+      createItem('prepHead', '头部放松', headRelaxed, '头部放松，目视下方', '头部抬起较多，颈部偏紧'),
+      createItem('prepFeet', '双脚站稳', feetStable, '双脚间距合理，站立稳定', '双脚间距异常或站姿不稳定'),
+    ])
   }
 
   const evaluateButterfly = (phase, landmarks, angles, standard) => {
@@ -644,5 +768,6 @@ export function useSwimAnalysis() {
     stopRecording,
     toggleRecording,
     addStroke,
+    setUnknownDetection,
   }
 }

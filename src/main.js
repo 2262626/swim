@@ -1,5 +1,6 @@
 import { createApp } from 'vue'
 import App from './App.vue'
+import 'element-plus/dist/index.css'
 import './assets/styles.css'
 
 const isProd = import.meta.env.PROD

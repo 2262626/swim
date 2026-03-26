@@ -13,14 +13,6 @@ const props = defineProps({
     type: Array,
     default: () => [],
   },
-  assessment: {
-    type: Object,
-    default: () => ({ score: null, items: [] }),
-  },
-  hideAssessment: {
-    type: Boolean,
-    default: false,
-  },
 })
 
 defineEmits(['reset', 'camera', 'pause', 'record', 'select-style'])
@@ -42,24 +34,6 @@ const formatAngle = (value) => (value ? `${value}°` : '—°')
         >
           {{ style }}
         </button>
-      </div>
-    </div>
-
-    <div v-if="!hideAssessment && assessment?.items?.length" class="panel-technique">
-      <div class="panel-technique-header">
-        <span>{{ selectedSwimStyle }}动作标准</span>
-        <strong>{{ assessment.score ?? 0 }}分</strong>
-      </div>
-      <div class="panel-technique-items">
-        <div
-          v-for="item in assessment.items"
-          :key="item.key"
-          class="panel-technique-item"
-          :class="{ ok: item.ok, bad: !item.ok }"
-        >
-          <span class="name">{{ item.label }}</span>
-          <span class="status">{{ item.ok ? '✓ 正确' : '✕ 错误' }}</span>
-        </div>
       </div>
     </div>
 

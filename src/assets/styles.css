@@ -146,6 +146,13 @@ html, body {
   display: block;
 }
 
+.capture-item-image {
+  width: 100%;
+  height: 110px;
+  min-height: 110px;
+  display: block;
+}
+
 .capture-item-meta {
   padding: 6px 8px;
   display: flex;
@@ -203,7 +210,7 @@ html, body {
   z-index: 11;
 }
 
-.butterfly-technique-panel {
+.freestyle-technique-panel {
   position: absolute;
   top: 56px;
   left: 12px;
@@ -252,6 +259,11 @@ html, body {
 .technique-item.bad {
   background: rgba(255, 64, 129, 0.14);
   color: #ff9dbb;
+}
+
+.technique-item.pending {
+  background: rgba(0, 229, 255, 0.08);
+  color: rgba(224, 247, 250, 0.8);
 }
 
 .badge-dot {
