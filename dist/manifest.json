@@ -1,7 +1,7 @@
 {
   "name": "游泳AI训练系统",
   "short_name": "游泳AI训练",
-  "description": "基于AI骨骼识别的游泳训练辅助系统",
+  "description": "基于AI游泳训练辅助系统",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0a0e14",

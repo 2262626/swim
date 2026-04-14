@@ -1,5 +1,6 @@
-import { createApp } from 'vue'
-import App from './App.vue'
+import { createApp, h } from 'vue'
+import { RouterView } from 'vue-router'
+import router from './router/index.js'
 import 'element-plus/dist/index.css'
 import './assets/styles.css'
 
@@ -41,4 +42,6 @@ window.addEventListener('offline', () => {
   console.log('网络已断开')
 })
 
-createApp(App).mount('#app')
+createApp({
+  render: () => h(RouterView),
+}).use(router).mount('#app')

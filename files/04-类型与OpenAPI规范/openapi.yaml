@@ -1,0 +1,431 @@
+openapi: 3.0.3
+info:
+  title: Swim Video Analysis API
+  version: 1.0.0
+  description: 自动暂停、圈点勾画、纠错建议与成长记录接口草案
+servers:
+  - url: /api/v1
+security:
+  - bearerAuth: []
+paths:
+  /analysis/tasks:
+    post:
+      summary: 创建分析任务
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTaskRequest'
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateTaskResponse'
+  /analysis/tasks/{task_id}/start:
+    post:
+      summary: 启动分析任务
+      parameters:
+        - $ref: '#/components/parameters/TaskId'
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonOkResponse'
+  /analysis/tasks/{task_id}/progress:
+    get:
+      summary: 获取分析进度
+      parameters:
+        - $ref: '#/components/parameters/TaskId'
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProgressResponse'
+  /analysis/tasks/{task_id}/pause-events:
+    get:
+      summary: 获取自动暂停事件
+      parameters:
+        - $ref: '#/components/parameters/TaskId'
+        - in: query
+          name: severity
+          schema:
+            type: string
+            enum: [low, medium, high]
+        - in: query
+          name: trigger_type
+          schema:
+            type: string
+        - in: query
+          name: from_ms
+          schema:
+            type: integer
+        - in: query
+          name: to_ms
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PauseEventListResponse'
+  /analysis/tasks/{task_id}/pause-events/{event_id}:
+    patch:
+      summary: 更新暂停事件处理结果
+      parameters:
+        - $ref: '#/components/parameters/TaskId'
+        - $ref: '#/components/parameters/EventId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdatePauseEventRequest'
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonOkResponse'
+  /analysis/tasks/{task_id}/annotations:
+    post:
+      summary: 新增手动批注
+      parameters:
+        - $ref: '#/components/parameters/TaskId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddAnnotationRequest'
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonOkResponse'
+  /analysis/tasks/{task_id}/report:
+    post:
+      summary: 生成分析报告
+      parameters:
+        - $ref: '#/components/parameters/TaskId'
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportResponse'
+  /analysis/reports/{report_id}:
+    get:
+      summary: 获取报告详情
+      parameters:
+        - $ref: '#/components/parameters/ReportId'
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportResponse'
+  /analysis/reports/{report_id}/export:
+    get:
+      summary: 导出报告
+      parameters:
+        - $ref: '#/components/parameters/ReportId'
+        - in: query
+          name: format
+          required: true
+          schema:
+            type: string
+            enum: [json, pdf]
+      responses:
+        '200':
+          description: 文件流
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+  /athletes/{athlete_id}/growth-records:
+    post:
+      summary: 写入成长记录
+      parameters:
+        - $ref: '#/components/parameters/AthleteId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SaveGrowthRecordRequest'
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonOkResponse'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    TaskId:
+      in: path
+      name: task_id
+      required: true
+      schema:
+        type: string
+    EventId:
+      in: path
+      name: event_id
+      required: true
+      schema:
+        type: string
+    ReportId:
+      in: path
+      name: report_id
+      required: true
+      schema:
+        type: string
+    AthleteId:
+      in: path
+      name: athlete_id
+      required: true
+      schema:
+        type: string
+  schemas:
+    CommonOkResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 200
+        msg:
+          type: string
+          example: ok
+        data:
+          type: object
+      required: [code, msg, data]
+    CreateTaskRequest:
+      type: object
+      properties:
+        athlete_id:
+          type: string
+        video_id:
+          type: string
+        stroke_type:
+          type: string
+          enum: [freestyle, breaststroke, butterfly, backstroke]
+        auto_pause_enabled:
+          type: boolean
+          default: true
+      required: [athlete_id, video_id, stroke_type]
+    CreateTaskResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+        msg:
+          type: string
+        data:
+          type: object
+          properties:
+            task_id:
+              type: string
+            status:
+              type: string
+              enum: [created, running, paused, completed, failed]
+          required: [task_id, status]
+      required: [code, msg, data]
+    ProgressData:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [created, running, paused, completed, failed]
+        progress:
+          type: number
+          minimum: 0
+          maximum: 100
+        current_time_ms:
+          type: integer
+        error_count:
+          type: integer
+        pause_count:
+          type: integer
+      required: [status, progress, current_time_ms, error_count, pause_count]
+    ProgressResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+        msg:
+          type: string
+        data:
+          $ref: '#/components/schemas/ProgressData'
+      required: [code, msg, data]
+    PauseEvidence:
+      type: object
+      properties:
+        metric:
+          type: string
+        value:
+          type: number
+        expected_range:
+          type: array
+          items:
+            type: number
+          minItems: 2
+          maxItems: 2
+    PauseEvent:
+      type: object
+      properties:
+        event_id:
+          type: string
+        task_id:
+          type: string
+        frame_index:
+          type: integer
+        timestamp_ms:
+          type: integer
+        severity:
+          type: string
+          enum: [low, medium, high]
+        trigger_type:
+          type: string
+          enum: [low_score, angle_out_of_range, timing_abnormal, pose_lost, phase_transition]
+        trigger_rule_id:
+          type: string
+        summary:
+          type: string
+        evidence:
+          $ref: '#/components/schemas/PauseEvidence'
+        user_action:
+          type: string
+          enum: [saved, ignored, pending]
+        interactive:
+          type: boolean
+          description: 是否触发了前端交互（暂停/弹窗）；false 表示仅后台记录不打断播放
+      required: [event_id, task_id, frame_index, timestamp_ms, severity, trigger_type, summary]
+    PauseEventListResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+        msg:
+          type: string
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/PauseEvent'
+      required: [code, msg, data]
+    UpdatePauseEventRequest:
+      type: object
+      properties:
+        user_action:
+          type: string
+          enum: [saved, ignored]
+        reason:
+          type: string
+      required: [user_action]
+    AddAnnotationRequest:
+      type: object
+      properties:
+        frame_index:
+          type: integer
+        annotation_type:
+          type: string
+          enum: [arrow, circle, rect, text]
+        points:
+          type: array
+          items:
+            type: object
+            properties:
+              x:
+                type: number
+              y:
+                type: number
+            required: [x, y]
+        text:
+          type: string
+      required: [frame_index, annotation_type, points]
+    AnalysisReport:
+      type: object
+      properties:
+        report_id:
+          type: string
+        task_id:
+          type: string
+        athlete_id:
+          type: string
+        overall_score:
+          type: number
+        stroke_scores:
+          type: object
+          properties:
+            freestyle:
+              type: number
+            breaststroke:
+              type: number
+            butterfly:
+              type: number
+            backstroke:
+              type: number
+        top_errors:
+          type: array
+          items:
+            type: string
+        pause_events:
+          type: array
+          items:
+            type: string
+        next_focus:
+          type: array
+          items:
+            type: string
+        created_at:
+          type: string
+      required: [report_id, task_id, athlete_id, overall_score, created_at]
+    ReportResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+        msg:
+          type: string
+        data:
+          $ref: '#/components/schemas/AnalysisReport'
+      required: [code, msg, data]
+    SaveGrowthRecordRequest:
+      type: object
+      properties:
+        report_id:
+          type: string
+        weekly_tag:
+          type: string
+        coach_summary:
+          type: string
+        next_targets:
+          type: array
+          items:
+            type: object
+            properties:
+              metric:
+                type: string
+              target:
+                type: string
+            required: [metric, target]
+      required: [report_id, weekly_tag]

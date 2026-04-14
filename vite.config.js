@@ -6,11 +6,19 @@ export default defineConfig({
   server: {
     port: 3000,
     open: true,
-    host: true,  // 允许局域网访问
-    cors: true   // 允许跨域
+    host: true,
+    cors: true,
+    proxy: {
+      '/dev-api': {
+        target: 'http://localhost:8088',
+        changeOrigin: true,
+        secure: false,
+        rewrite: (path) => path.replace(/^\/dev-api/, ''),
+      },
+    },
   },
   build: {
     outDir: 'dist',
-    assetsDir: 'assets'
-  }
+    assetsDir: 'assets',
+  },
 })

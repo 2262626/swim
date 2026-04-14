@@ -1,4 +1,4 @@
-const CACHE_NAME = 'swim-ai-v2'
+const CACHE_NAME = 'swim-ai-v3'
 const APP_SHELL = ['/', '/index.html', '/manifest.json']
 const CDN_HOST = 'cdn.jsdelivr.net'
 
@@ -26,6 +26,11 @@ self.addEventListener('fetch', (event) => {
   const requestURL = new URL(request.url)
 
   if (request.method !== 'GET') return
+
+  if (requestURL.pathname.startsWith('/prod-api/') || requestURL.pathname.startsWith('/dev-api/')) {
+    event.respondWith(fetch(request))
+    return
+  }
 
   if (request.mode === 'navigate') {
     event.respondWith((async () => {

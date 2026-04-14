@@ -30,6 +30,10 @@ const CONNECTIONS_SWIM_FIXED = [
   [KP.L_ELBOW, KP.L_WRIST],
   [KP.R_SHOULDER, KP.R_ELBOW],
   [KP.R_ELBOW, KP.R_WRIST],
+  [KP.L_HIP, KP.L_KNEE],
+  [KP.L_KNEE, KP.L_ANKLE],
+  [KP.R_HIP, KP.R_KNEE],
+  [KP.R_KNEE, KP.R_ANKLE],
 ]
 
 const POINTS_SWIM_FIXED = [
@@ -37,6 +41,8 @@ const POINTS_SWIM_FIXED = [
   KP.L_ELBOW, KP.R_ELBOW,
   KP.L_WRIST, KP.R_WRIST,
   KP.L_HIP, KP.R_HIP,
+  KP.L_KNEE, KP.R_KNEE,
+  KP.L_ANKLE, KP.R_ANKLE,
 ]
 
 const SEGMENT_COLORS = {
@@ -71,7 +77,8 @@ const config = ref({
   dotRadius: 5,
   showLabels: true,
   upperOnly: true,
-  minVisibility: 0.35,
+  // 腿部在水下和浪花遮挡时可见度偏低，降低阈值可减少腿部点位丢失
+  minVisibility: 0.25,
   // 性能优化：移动端禁用阴影
   enableShadow: !(/Android|webOS|iPhone|iPad|iPod/i.test(navigator.userAgent)),
 })

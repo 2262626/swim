@@ -6,7 +6,7 @@ const props = defineProps({
   settings: Object,
 })
 
-const emit = defineEmits(['close', 'apply', 'update-skeleton'])
+const emit = defineEmits(['close', 'apply', 'apply-high-accuracy', 'update-skeleton'])
 
 const localSettings = ref({ ...props.settings })
 
@@ -17,9 +17,19 @@ watch(() => props.isOpen, (newVal) => {
 })
 
 const colors = ['#00FFFC', '#FF006E', '#FFD600', '#76FF03']
+const cameraProfiles = [
+  { value: 'side', label: '池边侧拍' },
+  { value: 'diagonal', label: '斜侧拍' },
+  { value: 'front', label: '正前/正后拍' },
+  { value: 'underwater', label: '水下侧拍' },
+]
 
 const apply = () => {
   emit('apply', localSettings.value)
+}
+
+const applyHighAccuracy = () => {
+  emit('apply-high-accuracy')
 }
 
 const selectComplexity = (val) => {
@@ -58,6 +68,15 @@ const selectColor = (color) => {
           @click="selectComplexity(2)"
         >精准</button>
       </div>
+    </div>
+
+    <div class="setting-group">
+      <label>机位配置</label>
+      <select v-model="localSettings.cameraProfile">
+        <option v-for="profile in cameraProfiles" :key="profile.value" :value="profile.value">
+          {{ profile.label }}
+        </option>
+      </select>
     </div>
 
     <div class="setting-group">
@@ -125,5 +144,6 @@ const selectColor = (color) => {
     </div>
 
     <button class="action-btn primary full-width" @click="apply">应用设置</button>
+    <button class="action-btn full-width" @click="applyHighAccuracy">一键精度优先（模型2 + 0.7阈值）</button>
   </div>
 </template>
