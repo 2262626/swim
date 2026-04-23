@@ -385,7 +385,7 @@ const handleLogout = async () => {
         返回
       </button>
       <div class="ai-title">
-        <span>AI 视频分析</span>
+        <img src="../assets/logo.png" alt="logo" class="ai-header-logo" />
       </div>
       <div class="header-right">
         <span v-if="hasActiveTask" class="polling-badge">
@@ -648,6 +648,12 @@ const handleLogout = async () => {
   font-size: 17px;
   font-weight: 700;
   letter-spacing: 0.5px;
+}
+.ai-header-logo {
+  height: 28px;
+  width: auto;
+  object-fit: contain;
+  background-color: white;
 }
 .ai-icon { font-size: 20px; }
 .header-right { display: flex; align-items: center; gap: 12px; }

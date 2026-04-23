@@ -46,14 +46,14 @@ const goToAnalysis = () => router.push('/analysis')
 <template>
   <header class="top-bar">
     <div class="logo">
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-        <path d="M2 12C2 12 5 6 12 6C19 6 22 12 22 12C22 12 19 18 12 18C5 18 2 12 2 12Z" stroke="#00e5ff" stroke-width="1.8" />
-        <circle cx="12" cy="12" r="3" fill="#00e5ff" />
-      </svg>
       <div class="logo-copy">
         <span>{{ props.title }}</span>
         <small>{{ pageSubtitle }}</small>
       </div>
+    </div>
+
+    <div class="top-bar-center-logo">
+      <img src="../assets/logo.png" alt="logo" class="logo-img" />
     </div>
 
     <div class="top-actions">

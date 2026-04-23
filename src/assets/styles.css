@@ -591,6 +591,23 @@ html, body {
   min-width: 0;
 }
 
+.logo-img {
+  height: 32px;
+  width: auto;
+  object-fit: contain;
+  flex-shrink: 0;
+  background-color: white;
+}
+
+.top-bar-center-logo {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  pointer-events: none;
+}
+
 .logo-copy {
   display: grid;
   gap: 2px;
