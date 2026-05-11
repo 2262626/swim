@@ -1,9 +1,10 @@
-<script setup>
+﻿<script setup>
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { getVideoTaskApi, downloadReportApi, listVideoTasksApi, getAnnotationApi, getAnnotationContentApi, createShareLinkApi, getShareHistoryApi, getShareLinkApi } from '../api/videoAnalysis.js'
 import VideoAnnotator from '../components/VideoAnnotator.vue'
+import aiBadgeImage from '../assets/ai.png'
 
 const route = useRoute()
 const router = useRouter()
@@ -820,13 +821,18 @@ onUnmounted(() => clearPoll())
             </template>
           </div>
 
+        <div v-if="isSuccess" class="ai-result-badge">
+          <img :src="aiBadgeImage" alt="AI" class="ai-result-badge-icon" />
+          <span>生成内容 仅供参考</span>
+        </div>
+
         <div v-if="isSuccess">
           <div v-if="activeResultTab === 'evidence'" class="result-section">
             <div v-if="displayTaskVideoUrl" class="video-preview-panel">
               <div class="video-preview-header"><span>原始视频</span></div>
               <video class="video-preview-player" :src="displayTaskVideoUrl" :poster="originalVideoCoverUrl || undefined" controls preload="metadata"></video>
             </div>
-            <div v-if="videoDescription" class="video-desc-box">{{ videoDescription }}</div>
+            <div v-if="videoDescription" class="video-desc-box ai-result-box"><span class="ai-inline-chip"><img :src="aiBadgeImage" alt="AI" class="ai-inline-chip-icon" />摘要 仅供参考</span><span>{{ videoDescription }}</span></div>
             <div v-if="evidenceCards.length" class="evidence-grid">
               <div v-for="(card, idx) in evidenceCards" :key="idx" class="evidence-card">
                 <div class="evidence-topbar">
@@ -843,7 +849,7 @@ onUnmounted(() => clearPoll())
                 </div>
                 <div v-if="resolveMetricValue(card.metric_key) != null" class="evidence-value">指标值：{{ resolveMetricValue(card.metric_key) }}</div>
                 <div v-if="card.issue_summary" class="evidence-block">问题说明：{{ card.issue_summary }}</div>
-                <div v-if="card.reasoning" class="evidence-block">AI 判断依据：{{ card.reasoning }}</div>
+                <div v-if="card.reasoning" class="evidence-block ai-result-box"><span class="ai-inline-chip"><img :src="aiBadgeImage" alt="AI" class="ai-inline-chip-icon" />判断依据 仅供参考</span><span>{{ card.reasoning }}</span></div>
               </div>
             </div>
             <div v-else class="state-panel">暂无视频片段</div>
@@ -985,7 +991,7 @@ onUnmounted(() => clearPoll())
 
             <div v-else-if="activeResultTab === 'business'" class="business-wrap">
               <div class="biz-block">
-                <div class="biz-title">个性化教学建议</div>
+                <div class="biz-title biz-title-ai"><span>个性化教学建议</span><span class="ai-inline-chip"><img :src="aiBadgeImage" alt="AI" class="ai-inline-chip-icon" />生成 仅供参考</span></div>
                 <div class="biz-grid">
                   <div class="biz-card">
                     <div class="biz-subtitle">核心薄弱项</div>
@@ -1319,6 +1325,12 @@ onUnmounted(() => clearPoll())
 .detail-block summary { cursor: pointer; padding: 10px 12px; color: #00e5ff; font-size: 13px; font-weight: 600; user-select: none; }
 .json-block { margin: 0; padding: 10px 12px 12px; border-top: 1px solid rgba(255,255,255,0.06); background: rgba(0,0,0,0.18); color: #d8def8; font-size: 12px; line-height: 1.45; white-space: pre-wrap; word-break: break-word; max-height: 360px; overflow: auto; }
 .error-msg { color: #ff8a8a; font-size: 12px; margin: 0; }
+.ai-result-badge { display: inline-flex; align-items: center; gap: 8px; margin-bottom: 12px; padding: 8px 12px; border-radius: 999px; border: 1px solid rgba(0, 229, 255, 0.22); background: rgba(0, 229, 255, 0.1); color: #a9f7ff; font-size: 12px; font-weight: 700; }
+.ai-result-badge-icon { width: 18px; height: 14px; object-fit: contain; }
+.ai-result-box { display: flex; flex-direction: column; gap: 8px; }
+.ai-inline-chip { display: inline-flex; align-items: center; gap: 6px; width: fit-content; padding: 4px 10px; border-radius: 999px; background: rgba(0, 229, 255, 0.12); border: 1px solid rgba(0, 229, 255, 0.22); color: #8ef3ff; font-size: 11px; font-weight: 700; }
+.ai-inline-chip-icon { width: 14px; height: 11px; object-fit: contain; }
+.biz-title-ai { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 
 @media (max-width: 1200px) {
   .kv-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -1359,3 +1371,5 @@ onUnmounted(() => clearPoll())
   .evidence-grid { grid-template-columns: 1fr; }
 }
 </style>
+
+
